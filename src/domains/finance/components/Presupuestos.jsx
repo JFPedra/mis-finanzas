@@ -136,9 +136,20 @@ export default function Presupuestos({ onNavigate }) {
     patchAppConfig({ flujoPeriodo: next }).catch(() => {});
   };
 
+  // Clasificación de cuentas para el "disponible en caja": tarjetas de crédito
+  // por nombre; ahorros por nombre o por estar vinculadas a una meta
+  const cuentasCredito = useMemo(
+    () => new Set((appConfig?.accounts || []).filter(a => /cr[eé]dit/i.test(a))),
+    [appConfig]);
+  const cuentasAhorro = useMemo(() => {
+    const s = new Set((appConfig?.accounts || []).filter(a => /ahorro/i.test(a)));
+    goals.forEach(g => { if (g.cuenta) s.add(g.cuenta); });
+    return s;
+  }, [appConfig, goals]);
+
   const flujo = useMemo(
-    () => sumPeriodFlows(transactions, rango.desde, rango.hasta, currentContext),
-    [transactions, rango, currentContext]);
+    () => sumPeriodFlows(transactions, rango.desde, rango.hasta, currentContext, { cuentasCredito, cuentasAhorro }),
+    [transactions, rango, currentContext, cuentasCredito, cuentasAhorro]);
 
   const rangoDias = useMemo(() => {
     if (!rango.desde || !rango.hasta) return 0;
@@ -586,6 +597,19 @@ export default function Presupuestos({ onNavigate }) {
                     {formatCurrency(m.neto, moneda)}
                   </div>
                 </div>
+              </div>
+            ))}
+            {Object.entries(flujo.disponible).map(([moneda, v]) => (
+              <div key={moneda} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, padding: '10px 0', borderTop: '1px solid var(--border-default)' }}>
+                <div style={{ minWidth: 0 }}>
+                  <Eyebrow>Disponible en caja{Object.keys(flujo.disponible).length > 1 ? ` · ${moneda}` : ''}</Eyebrow>
+                  <div style={{ fontSize: 10.5, color: 'var(--fg-4)', marginTop: 2, lineHeight: 1.35 }}>
+                    Ingresos − gastos de banco/efectivo − pago de tarjeta − ahorros. Las compras con tarjeta restan aquí cuando la pagas.
+                  </div>
+                </div>
+                <span style={{ flexShrink: 0, fontSize: 16, fontWeight: 800, fontFamily: 'var(--font-mono)', color: v < 0 ? 'var(--danger-700)' : 'var(--olive-600)' }}>
+                  {formatCurrency(v, moneda)}
+                </span>
               </div>
             ))}
             {flujo.transfers.length > 0 && (

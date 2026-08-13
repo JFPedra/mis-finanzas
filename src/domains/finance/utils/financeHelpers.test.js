@@ -344,4 +344,57 @@ describe('sumPeriodFlows', () => {
         const { count } = sumPeriodFlows(legacy, '2026-08-01', '2026-08-31');
         expect(count).toBe(0);
     });
+
+    describe('disponible en caja', () => {
+        const OPTS = {
+            cuentasCredito: new Set(['Tarjeta de Crédito Principal']),
+            cuentasAhorro: new Set(['Cuenta Ahorros Nubank']),
+        };
+        const BANCO = 'Cuenta Bancaria Bancolombia';
+
+        it('suma ingresos y resta gastos de cuentas de caja', () => {
+            const txs2 = [
+                { type: 'credit', amount: 3000000, date: '2026-08-05', card: BANCO, currency: 'COP' },
+                { type: 'debit', amount: 500000, date: '2026-08-06', card: BANCO, currency: 'COP' },
+            ];
+            const { disponible } = sumPeriodFlows(txs2, '2026-08-01', '2026-08-31', 'unified', OPTS);
+            expect(disponible.COP).toBe(2500000);
+        });
+
+        it('las compras con tarjeta de crédito no restan; el pago de la tarjeta sí', () => {
+            const txs2 = [
+                { type: 'debit', amount: 800000, date: '2026-08-05', card: 'Tarjeta de Crédito Principal', currency: 'COP' },
+                { type: 'transfer', amount: 800000, date: '2026-08-20', card: BANCO, destinationCard: 'Tarjeta de Crédito Principal', currency: 'COP' },
+            ];
+            const { disponible, porMoneda } = sumPeriodFlows(txs2, '2026-08-01', '2026-08-31', 'unified', OPTS);
+            expect(disponible.COP).toBe(-800000);
+            expect(porMoneda.COP.egresos).toBe(800000); // el neto contable no cambia
+        });
+
+        it('los aportes a ahorro restan y los retiros de ahorro devuelven', () => {
+            const txs2 = [
+                { type: 'transfer', amount: 500000, date: '2026-08-05', card: BANCO, destinationCard: 'Cuenta Ahorros Nubank', currency: 'COP' },
+                { type: 'transfer', amount: 200000, date: '2026-08-20', card: 'Cuenta Ahorros Nubank', destinationCard: BANCO, currency: 'COP' },
+            ];
+            const { disponible } = sumPeriodFlows(txs2, '2026-08-01', '2026-08-31', 'unified', OPTS);
+            expect(disponible.COP).toBe(-300000);
+        });
+
+        it('mover plata entre cuentas de caja no cambia el disponible', () => {
+            const txs2 = [
+                { type: 'transfer', amount: 100000, date: '2026-08-05', card: BANCO, destinationCard: 'Efectivo', currency: 'COP' },
+            ];
+            const { disponible } = sumPeriodFlows(txs2, '2026-08-01', '2026-08-31', 'unified', OPTS);
+            expect(disponible.COP).toBeUndefined();
+        });
+
+        it('gastos y créditos dentro de la cuenta de ahorros no tocan el disponible', () => {
+            const txs2 = [
+                { type: 'debit', amount: 50000, date: '2026-08-05', card: 'Cuenta Ahorros Nubank', currency: 'COP' },
+                { type: 'credit', amount: 10000, date: '2026-08-06', card: 'Cuenta Ahorros Nubank', currency: 'COP' },
+            ];
+            const { disponible } = sumPeriodFlows(txs2, '2026-08-01', '2026-08-31', 'unified', OPTS);
+            expect(disponible.COP).toBeUndefined();
+        });
+    });
 });

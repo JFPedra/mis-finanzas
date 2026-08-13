@@ -107,14 +107,31 @@ export const shortAccount = (label) => {
  * move money between accounts — but they are collected separately so the UI
  * can show them.
  *
+ * Additionally computes "disponible en caja" — cash-basis flow of the liquid
+ * accounts (everything that is not a credit card nor a savings account):
+ *   + credits into cash accounts (salary)
+ *   − debits paid from cash accounts
+ *   − transfers from cash to a credit card (card payment) or savings (set aside)
+ *   + transfers from savings back to cash (recovered)
+ * Credit-card purchases don't subtract here — they subtract when the card is
+ * paid — so nothing is counted twice.
+ *
  * @param {Array<object>} transactions
  * @param {string} desde - Range start, 'YYYY-MM-DD' (inclusive).
  * @param {string} hasta - Range end, 'YYYY-MM-DD' (inclusive).
  * @param {string} [context='unified'] - 'personal' | 'business' | 'unified' (all).
- * @returns {{porMoneda: Object<string, {ingresos: number, egresos: number, neto: number, transferencias: number}>, transfers: Array<object>, count: number}}
+ * @param {{cuentasCredito?: Set<string>, cuentasAhorro?: Set<string>}} [opts]
+ * @returns {{porMoneda: Object<string, {ingresos: number, egresos: number, neto: number, transferencias: number}>, disponible: Object<string, number>, transfers: Array<object>, count: number}}
  */
-export const sumPeriodFlows = (transactions, desde, hasta, context = 'unified') => {
+export const sumPeriodFlows = (transactions, desde, hasta, context = 'unified', opts = {}) => {
+    const cuentasCredito = opts.cuentasCredito || new Set();
+    const cuentasAhorro = opts.cuentasAhorro || new Set();
+    const esCredito = (acc) => cuentasCredito.has(acc);
+    const esAhorro = (acc) => cuentasAhorro.has(acc);
+    const esCaja = (acc) => !esCredito(acc) && !esAhorro(acc);
+
     const porMoneda = {};
+    const disponible = {};
     const transfers = [];
     let count = 0;
 
@@ -131,22 +148,30 @@ export const sumPeriodFlows = (transactions, desde, hasta, context = 'unified') 
         if (!porMoneda[currency]) porMoneda[currency] = { ingresos: 0, egresos: 0, neto: 0, transferencias: 0 };
 
         const amount = Number(t.amount) || 0;
+        const addDisponible = (delta) => { disponible[currency] = (disponible[currency] || 0) + delta; };
+
         if (esTransfer) {
             porMoneda[currency].transferencias += amount;
             transfers.push(t);
+            const origen = t.card || t.account;
+            const destino = t.destinationCard;
+            if (esCaja(origen) && (esCredito(destino) || esAhorro(destino))) addDisponible(-amount);
+            else if (esAhorro(origen) && esCaja(destino)) addDisponible(amount);
             return;
         }
         if (t.type === 'credit') {
             porMoneda[currency].ingresos += amount;
             porMoneda[currency].neto += amount;
+            if (esCaja(t.card || t.account)) addDisponible(amount);
         } else {
             porMoneda[currency].egresos += amount;
             porMoneda[currency].neto -= amount;
+            if (esCaja(t.card || t.account)) addDisponible(-amount);
         }
         count += 1;
     });
 
-    return { porMoneda, transfers, count };
+    return { porMoneda, disponible, transfers, count };
 };
 
 export const calcGoalSavings = (goal, transactions) => {
