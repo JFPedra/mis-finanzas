@@ -1,6 +1,11 @@
 google-genai
-firebase-admin
+firebase-admin==7.5.0
 google-auth
 google-auth-oauthlib
 google-api-python-client
 beautifulsoup4
+# 2026-08-24: google-api-core 2.35.0 + google-cloud-firestore 2.29.0 rompen el
+# cliente de Firestore ("400 Invalid database id %28default%29" — el routing
+# header llega URL-encodeado). Pineadas a las últimas versiones que funcionan.
+google-api-core==2.34.0
+google-cloud-firestore==2.28.1
