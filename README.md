@@ -13,7 +13,7 @@ App de finanzas personales con pipeline de transacciones por IA. Los correos de 
 
 ```
 Gmail (correos del banco, etiqueta Bancos/PendingBot)
-      ↓  [Gmail API — cron de GitHub Actions cada ~10 min]
+      ↓  [Gmail API — cron de GitHub Actions 3 veces al día]
 Parser de correo (BeautifulSoup)
       ↓
 Gemini (gemini-3.1-flash-lite) → JSON estructurado
@@ -46,7 +46,7 @@ Push notification: "nuevo movimiento por revisar"
 | Auth y DB | Firebase Auth (Google) + Firestore, whitelist de emails |
 | IA | Google Gemini API (`gemini-3.1-flash-lite`) |
 | Pipeline de correos | Python 3.12, Gmail API, BeautifulSoup |
-| Automatización | GitHub Actions (cron ~10 min + deploy a Hosting en cada push a `main`) |
+| Automatización | GitHub Actions (cron 12:40 pm, 6:40 pm y 10:40 pm + deploy a Hosting en cada push a `main`) |
 
 ---
 
@@ -136,7 +136,7 @@ gh workflow run gmail_sync.yml            # disparo manual
 gh run watch                              # ver el resultado
 ```
 
-**Gotchas**: en un **fork**, GitHub deja los workflows programados en estado `disabled_fork` — el cron nunca corre hasta habilitarlo (`gh workflow enable gmail_sync.yml`), aunque los disparos manuales sí funcionen y enmascaren el problema; el cron corre cada ~10 min pero GitHub puede atrasarlo; GitHub desactiva los crons tras 60 días sin commits (avisa por correo, se reactiva con un clic); si sale `invalid_grant`, re-ejecutar `bootstrap_token.py`. Verificar el estado real con `gh api repos/<owner>/<repo>/actions/workflows --jq '.workflows[] | "\(.name): \(.state)"'`.
+**Gotchas**: en un **fork**, GitHub deja los workflows programados en estado `disabled_fork` — el cron nunca corre hasta habilitarlo (`gh workflow enable gmail_sync.yml`), aunque los disparos manuales sí funcionen y enmascaren el problema; el cron corre a las 12:40 pm, 6:40 pm y 10:40 pm (hora Colombia) pero GitHub puede atrasarlo; para no esperar, `gh workflow run gmail_sync.yml`; GitHub desactiva los crons tras 60 días sin commits (avisa por correo, se reactiva con un clic); si sale `invalid_grant`, re-ejecutar `bootstrap_token.py`. Verificar el estado real con `gh api repos/<owner>/<repo>/actions/workflows --jq '.workflows[] | "\(.name): \(.state)"'`.
 
 ### 6. Hosting y deploy automático
 
@@ -188,7 +188,7 @@ Cambiar a `true` restaura el módulo completo. Ojo: con `business: false`, una t
 - **Solo cuentas de ahorros y de bajo monto**: efectivo y tarjetas de crédito no tienen tope propio; lo que cuenta es la plata que sale de la cuenta hacia ellos (retiro de cajero, pago de tarjeta).
 - **Tope**: cuenta de ahorros 350 UVT al mes (art. 879 num. 1 del E.T.; una exenta por persona) y depósito de bajo monto 65 UVT al mes (num. 25; una exenta por entidad). La UVT oficial por año está en `UVT_BY_YEAR` de `accountHelpers.js` y `gmf.py` (2026: $52.374, Resolución DIAN 000238 de 2025 → topes $18.330.900 y $3.404.310). No hay una API oficial de la DIAN para consultarla; cuando salga la UVT de un año nuevo, se fija en Yo → Finanzas → 4x1000 · UVT (y conviene actualizar las dos tablas). Cada cuenta también admite un tope manual.
 - **Qué suma**: compras, retiros y transferencias que salen de la cuenta en el mes calendario, en COP. Es una estimación: el banco puede excluir algunos movimientos.
-- **Alertas**: el cron del sync (cada ~10 min) revisa las cuentas exentas con avisos activos y envía una push por cada umbral nuevo cruzado en el mes. Lo ya notificado queda en `gmf_alerts/{producto}_{YYYY-MM}`, así que no se repite.
+- **Alertas**: el cron del sync (3 veces al día) revisa las cuentas exentas con avisos activos y envía una push por cada umbral nuevo cruzado en el mes. Lo ya notificado queda en `gmf_alerts/{producto}_{YYYY-MM}`, así que no se repite.
 - **Datos**: los productos viven en `finance_settings/default.products` (tipo, principal, banco, últimos 4, remitentes, pistas, config GMF); `accounts` se mantiene como la lista de nombres que usa el resto del código. Renombrar un producto re-apunta sus movimientos y metas al nombre nuevo.
 
 ## Cómo se asigna cada correo a un producto

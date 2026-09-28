@@ -1,6 +1,6 @@
 # Gmail → Firebase Sync — Setup
 
-The sync (`gmail_finanzas_sync.py`) runs on a **GitHub Actions scheduled workflow** every ~10 minutes. It imports bank transactions from Gmail into Firestore, using the **Google Gemini API** to parse unstructured email content into structured financial data.
+The sync (`gmail_finanzas_sync.py`) runs on a **GitHub Actions scheduled workflow** three times a day: 12:40 pm, 6:40 pm and 10:40 pm Colombia time (`40 17,23,3 * * *` UTC). It imports bank transactions from Gmail into Firestore, using the **Google Gemini API** to parse unstructured email content into structured financial data.
 
 There is no local machine or cron involved — once set up, it runs entirely on GitHub's infrastructure.
 
@@ -8,7 +8,7 @@ There is no local machine or cron involved — once set up, it runs entirely on 
 
 ## How it works
 
-1. The `Gmail Finance Sync` workflow (`.github/workflows/gmail_sync.yml`) triggers every ~10 minutes
+1. The `Gmail Finance Sync` workflow (`.github/workflows/gmail_sync.yml`) triggers at 12:40 pm, 6:40 pm and 10:40 pm Colombia time
 2. It polls Gmail for emails with the configured label — `gmailLabel` in `finance_settings/default`, editable in the app under Settings → Finanzas (default: `Bancos/PendingBot`)
 3. Each email body is sent to Gemini (`gemini-3.1-flash-lite`), which returns a structured transaction
 4. The transaction is saved to the `finance_transactions` Firestore collection
@@ -76,7 +76,7 @@ firebase deploy --only firestore:rules
 
 ## Running it
 
-- **Automatic:** the workflow runs every ~10 minutes once `gmail_sync.yml` is on the `main` branch.
+- **Automatic:** the workflow runs three times a day once `gmail_sync.yml` is on the `main` branch.
 - **Manual:** GitHub → Actions → *Gmail Finance Sync* → *Run workflow*, or:
   ```bash
   gh workflow run gmail_sync.yml

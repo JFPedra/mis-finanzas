@@ -515,7 +515,7 @@ function SyncStatus({ sources }) {
     ), []);
 
     if (!status) {
-        return <p style={{ ...HINT, marginTop: 0 }}>Aún no hay corridas registradas. El proceso corre cada ~10 minutos.</p>;
+        return <p style={{ ...HINT, marginTop: 0 }}>Aún no hay corridas registradas. El proceso corre a las 12:40 pm, 6:40 pm y 10:40 pm.</p>;
     }
     const lastRun = status.lastRunAt?.toDate ? status.lastRunAt.toDate() : null;
     const perSource = status.perSource || {};
@@ -643,7 +643,7 @@ export function EmailSourcesSection() {
                 ) : null}
             </div>
             <p style={{ ...HINT, margin: '0 0 14px' }}>
-                Cada ~10 minutos el proceso busca en tu Gmail los correos de estos remitentes. Copia la dirección desde un correo de alerta del banco; también puedes poner solo el dominio (ej. banco.com.co).
+                Tres veces al día (12:40 pm, 6:40 pm y 10:40 pm) el proceso busca en tu Gmail los correos de estos remitentes. Copia la dirección desde un correo de alerta del banco; también puedes poner solo el dominio (ej. banco.com.co).
             </p>
 
             {editing !== undefined ? (
