@@ -18,7 +18,7 @@ service cloud.firestore {
       // Creation only during bootstrap, and only by the owner
       allow create: if request.auth != null &&
                     !exists(/databases/$(database)/documents/finance_settings/users) &&
-                    request.auth.token.email == 'hoyosdilan@gmail.com';
+                    request.auth.token.email == 'jfpedrazag@gmail.com';
       // Allow modifications ONLY by people already in the whitelist
       allow update, delete: if isUserAllowed();
     }
