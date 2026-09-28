@@ -4,10 +4,12 @@ import {
 } from 'recharts';
 import { formatCurrency, formatCompactNumber } from '../../../shared/utils/format';
 
+// Acentos brillantes: se leen bien como línea sobre el fondo oscuro y con
+// texto oscuro encima en el chip activo.
 const CURRENCY_COLORS = {
-  COP: 'var(--clay-500)',
-  USD: 'var(--olive-500)',
-  EUR: 'var(--amber-500)',
+  COP: 'var(--clay-400)',
+  USD: 'var(--olive-400)',
+  EUR: 'var(--amber-300)',
   DEFAULT: 'var(--plum-400)',
 };
 
@@ -26,7 +28,7 @@ export default function BalanceChart({ dataPoints, currencies, selectedCurrency,
                 onClick={() => onCurrencyChange(cur)}
                 style={{
                   padding: '4px 10px', borderRadius: 9999, border: `1.5px solid ${color}`,
-                  background: active ? color : 'transparent', color: active ? '#fff' : color,
+                  background: active ? color : 'transparent', color: active ? 'var(--ink-800)' : color,
                   fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: 11, cursor: 'pointer',
                 }}
               >{cur}</button>

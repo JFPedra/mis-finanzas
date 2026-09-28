@@ -155,7 +155,7 @@ function ViewLoader() {
       <div style={{
         width: 28, height: 28, borderRadius: '50%',
         border: '3px solid rgba(34, 211, 238, 0.2)',
-        borderTopColor: '#0891B2',
+        borderTopColor: '#0B7F9C',
         animation: 'splash-spin 0.8s linear infinite',
       }} />
     </div>
@@ -172,7 +172,7 @@ function AuthSplash() {
         width: 36, height: 36, margin: '-18px 0 0 -18px',
         borderRadius: '50%',
         border: '3px solid rgba(34, 211, 238, 0.2)',
-        borderTopColor: '#0891B2',
+        borderTopColor: '#0B7F9C',
         animation: 'splash-spin 0.8s linear infinite',
       }} />
     </div>

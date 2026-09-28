@@ -87,7 +87,7 @@ export default function ConfirmModal({
                             style={{
                                 flex: 1, padding: '11px 16px',
                                 borderRadius: 12, border: 'none',
-                                background: isDestructive ? 'var(--danger-700)' : 'var(--clay-500)',
+                                background: isDestructive ? 'var(--danger-600)' : 'var(--clay-500)',
                                 color: '#fff',
                                 fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: 14,
                                 cursor: 'pointer',

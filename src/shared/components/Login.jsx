@@ -138,7 +138,7 @@ export default function Login() {
             position: 'absolute', top: 252, left: 20, right: 64,
             background: 'var(--clay-500)', color: '#fff',
             borderRadius: 18, padding: '12px 14px',
-            boxShadow: '0 20px 40px rgba(8,145,178,0.42)',
+            boxShadow: '0 20px 40px rgba(11,127,156,0.42)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Icon name="local_fire_department" size={22} fill />
@@ -173,7 +173,7 @@ export default function Login() {
           style={{
             width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
             height: 54, borderRadius: 14, border: 'none',
-            background: loading ? 'var(--clay-600)' : 'var(--clay-500)',
+            background: loading ? 'var(--clay-800)' : 'var(--clay-500)',
             color: '#fff', cursor: loading ? 'wait' : 'pointer',
             fontFamily: 'var(--font-sans)', fontWeight: 800, fontSize: 15,
             boxShadow: 'var(--shadow-clay)',

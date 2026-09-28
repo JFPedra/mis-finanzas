@@ -987,7 +987,7 @@ export default function Settings({ push, initialTab }) {
                     ) : (
                         <div style={{
                             width: 56, height: 56, borderRadius: '50%',
-                            background: 'linear-gradient(135deg, var(--clay-400), var(--clay-600))',
+                            background: 'linear-gradient(135deg, var(--clay-500), var(--clay-800))',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 26,
                             color: '#fff', fontWeight: 500,
