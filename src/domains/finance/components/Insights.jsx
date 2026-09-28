@@ -101,7 +101,7 @@ export default function Insights({ onNavigate, onEditTransaction }) {
 
     // 4x1000: cuentas exentas que ya cruzaron el primer umbral de aviso
     products
-      .filter(p => p.type === 'savings' && p.gmf.exempt && p.gmf.alertsEnabled)
+      .filter(p => p.gmf.exempt && p.gmf.alertsEnabled)
       .forEach(p => {
         const s = gmfStatus(p, transactions, today, appConfig?.uvtOverrides);
         if (s.level === 'ok') return;

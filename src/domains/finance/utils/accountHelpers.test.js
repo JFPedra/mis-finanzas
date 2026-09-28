@@ -1,17 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import {
-    inferProductType, productSlug, getProducts, normalizeThresholds,
+    inferProductType, productSlug, getProducts, normalizeThresholds, principalProduct,
+    getEmailSources, getEmailSync,
     buildPeriods, periodKey, totalFlowsByPeriod, productFlowsByPeriod,
     uvtFor, gmfMonthlyLimit, gmfMonthlyUsage, gmfStatus,
 } from './accountHelpers';
 
 describe('inferProductType', () => {
-    it('detects credit cards, cash and checking; defaults to savings', () => {
+    it('detects credit cards, cash and low-value accounts; defaults to savings', () => {
         expect(inferProductType('Tarjeta de Crédito Principal')).toBe('credit');
         expect(inferProductType('Visa Oro')).toBe('credit');
         expect(inferProductType('Efectivo')).toBe('cash');
-        expect(inferProductType('Cuenta Corriente Davivienda')).toBe('checking');
+        expect(inferProductType('Nequi')).toBe('lowvalue');
+        expect(inferProductType('Daviplata')).toBe('lowvalue');
         expect(inferProductType('Cuenta Bancaria')).toBe('savings');
+    });
+
+    it('has no checking account type', () => {
+        const [p] = getProducts({ accounts: ['Cuenta Corriente'], products: [{ name: 'Cuenta Corriente', type: 'checking' }] });
+        expect(p.type).toBe('savings');
     });
 });
 
@@ -44,9 +51,61 @@ describe('getProducts', () => {
         expect(products[1].gmf.thresholds).toEqual([80, 95]);
     });
 
-    it('never marks non-savings products as GMF exempt', () => {
-        const [card] = getProducts({ accounts: ['Visa'], products: [{ name: 'Visa', type: 'credit', gmf: { exempt: true } }] });
-        expect(card.gmf.exempt).toBe(false);
+    it('never marks credit cards or cash as GMF exempt; low-value accounts can be', () => {
+        const products = getProducts({
+            accounts: ['Visa', 'Efectivo', 'Nequi'],
+            products: [
+                { name: 'Visa', type: 'credit', gmf: { exempt: true } },
+                { name: 'Efectivo', type: 'cash', gmf: { exempt: true } },
+                { name: 'Nequi', type: 'lowvalue', gmf: { exempt: true } },
+            ],
+        });
+        expect(products.map(p => p.gmf.exempt)).toEqual([false, false, true]);
+    });
+
+    it('keeps a single principal savings account', () => {
+        const products = getProducts({
+            accounts: ['A', 'B', 'Nequi'],
+            products: [
+                { name: 'A', type: 'savings', principal: true },
+                { name: 'B', type: 'savings', principal: true },
+                { name: 'Nequi', type: 'lowvalue', principal: true },
+            ],
+        });
+        expect(products.map(p => p.principal)).toEqual([true, false, false]);
+        expect(principalProduct(products).name).toBe('A');
+        expect(principalProduct(getProducts({ accounts: ['Visa', 'B'] })).name).toBe('B');
+    });
+
+    it('normalizes senders and clears bank data for cash', () => {
+        const [a, cash] = getProducts({
+            accounts: ['A', 'Efectivo'],
+            products: [
+                { name: 'A', type: 'savings', senders: [' @Banco.com.co ', 'banco.com.co'], hints: 'Dice *1234' },
+                { name: 'Efectivo', type: 'cash', senders: ['x.com'], last4: '1111' },
+            ],
+        });
+        expect(a.senders).toEqual(['banco.com.co']);
+        expect(a.hints).toBe('Dice *1234');
+        expect(cash.senders).toEqual([]);
+        expect(cash.last4).toBe('');
+    });
+});
+
+describe('email sources', () => {
+    it('normalizes addresses, subjects and drops empty ones', () => {
+        const sources = getEmailSources({
+            emailSources: [
+                { address: ' Alertas@Banco.com ', name: 'Banco', excludeSubjects: ['Promoción', 'promoción', ' '] },
+                { address: '' },
+            ],
+        });
+        expect(sources).toEqual([{ address: 'alertas@banco.com', name: 'Banco', enabled: true, excludeSubjects: ['promoción'] }]);
+    });
+
+    it('uses the Gmail label by default', () => {
+        expect(getEmailSync({})).toEqual({ startDate: '', useLabel: true });
+        expect(getEmailSync({ emailSync: { useLabel: false, startDate: '2026-09-01' } })).toEqual({ startDate: '2026-09-01', useLabel: false });
     });
 });
 
@@ -125,10 +184,32 @@ describe('GMF (4x1000)', () => {
         expect(uvtFor(2026, { 2026: 60000 })).toEqual({ value: 60000, source: 'manual' });
     });
 
+    it('uses 65 UVT for low-value accounts and counts their outflows', () => {
+        const nequi = { name: 'Nequi', type: 'lowvalue', gmf: { exempt: true, limitMode: 'uvt', thresholds: [80] } };
+        expect(gmfMonthlyLimit(nequi, 2026).limit).toBe(3404310);
+        const tx = [
+            { type: 'debit', amount: 3000000, currency: 'COP', card: 'Nequi', date: '2026-09-02' },
+            { type: 'credit', amount: 9000000, currency: 'COP', card: 'Nequi', date: '2026-09-01' },
+        ];
+        const s = gmfStatus(nequi, tx, new Date(2026, 8, 10));
+        expect(s.used).toBe(3000000);
+        expect(s.level).toBe('warn');
+    });
+
+    it('counts ATM withdrawals and card payments against the savings account, not cash or the card', () => {
+        const tx = [
+            { type: 'transfer', amount: 400000, currency: 'COP', card: 'Ahorros', destinationCard: 'Efectivo', date: '2026-09-02' },
+            { type: 'transfer', amount: 600000, currency: 'COP', card: 'Ahorros', destinationCard: 'Visa', date: '2026-09-03' },
+            { type: 'debit', amount: 50000, currency: 'COP', card: 'Efectivo', date: '2026-09-04' },
+            { type: 'debit', amount: 70000, currency: 'COP', card: 'Visa', date: '2026-09-05' },
+        ];
+        expect(gmfMonthlyUsage(tx, 'Ahorros', new Date(2026, 8, 10)).used).toBe(1000000);
+    });
+
     it('computes 350 UVT as the monthly limit, or the manual override', () => {
         expect(gmfMonthlyLimit(product, 2026).limit).toBe(18330900);
         const manual = { ...product, gmf: { ...product.gmf, limitMode: 'manual', manualLimit: 10000000 } };
-        expect(gmfMonthlyLimit(manual, 2026)).toEqual({ limit: 10000000, source: 'manual', uvt: null });
+        expect(gmfMonthlyLimit(manual, 2026)).toMatchObject({ limit: 10000000, source: 'manual' });
     });
 
     it('counts debits and transfers out in the month, COP only', () => {

@@ -22,6 +22,9 @@ from tx_enrich import (
     validate_classification, looks_like_statement, resolve_product,
 )
 import gmf
+from email_query import (
+    search_after, build_sender_query, header, from_address, match_source, excluded_by_subject,
+)
 
 # --- CONFIGURACIÓN ---
 # Zona horaria de Colombia (UTC-5 fijo; el país no usa horario de verano).
@@ -48,6 +51,12 @@ PROCESSED_COLLECTION = 'processed_gmail_ids'
 
 # Tamaño máximo de texto del correo enviado al modelo
 MAX_BODY_CHARS = 3500
+
+# Tope de correos por corrida (la búsqueda por remitentes es paginada)
+MAX_MESSAGES_PER_RUN = 300
+
+# Estado de la última corrida, que la app muestra en Correos del banco
+SYNC_STATUS_COLLECTION = 'sync_status'
 
 # Cuántas transacciones recientes traer para construir la memoria de comercios
 MEMORY_HISTORY_LIMIT = 400
@@ -210,7 +219,7 @@ def _prefetch_context(db):
 
 _TIPO_PRODUCTO = {
     'savings': 'cuenta de ahorros',
-    'checking': 'cuenta corriente',
+    'lowvalue': 'cuenta de bajo monto',
     'credit': 'tarjeta de crédito',
     'cash': 'efectivo',
 }
@@ -221,24 +230,30 @@ def _productos_para_prompt(productos):
         {k: v for k, v in {
             'nombre': p['name'],
             'tipo': _TIPO_PRODUCTO.get(p['type'], p['type']),
+            'principal': p.get('principal') or None,
             'banco': p['bank'],
             'ultimos4': p['last4'],
+            'remitentes': p.get('senders') or None,
+            'como_reconocerlo': p.get('hints'),
         }.items() if v}
         for p in productos
     ]
 
 
-def procesar_texto_con_ia(texto, db, client):
+def procesar_texto_con_ia(texto, db, client, remitente='', asunto=''):
     """Analiza el correo con Gemini y devuelve la transacción enriquecida.
 
     En una sola llamada extrae la transacción y la normaliza (categoría,
-    subcategoría y contexto), usando como contexto el árbol de categorías y el
-    historial reciente. Devuelve (datos, cat_tree).
+    subcategoría, producto y contexto), usando como contexto el árbol de
+    categorías, los productos con sus pistas y el historial reciente.
+    Devuelve (datos, cat_tree).
     """
     print("🧠 Obteniendo contexto desde Firestore...")
     cat_tree, cuentas, monedas, recientes, memoria, productos = _prefetch_context(db)
     nombres_categorias = [c['name'] for c in cat_tree]
     memoria_prompt = memory_for_prompt(memoria)
+    principal = gmf.principal_product(productos)
+    efectivo = next((p['name'] for p in productos if p['type'] == 'cash'), None)
 
     prompt = f"""Eres un experto asistente financiero que lee correos de notificaciones bancarias.
 Extrae los datos de la transacción descrita en el correo y devuelve ÚNICAMENTE un objeto JSON válido.
@@ -253,18 +268,22 @@ Si el correo es una notificación de un pago que TÚ hiciste, type = 'debit'.
 Categorías disponibles (cada una con sus subcategorías válidas):
 {json.dumps(cat_tree, ensure_ascii=False, indent=2)}
 
-Productos financieros del usuario (cuentas/tarjetas), con tipo, banco y últimos 4 dígitos cuando se conocen:
+Productos financieros del usuario. "remitentes" son las direcciones o dominios desde los que llegan
+sus correos y "como_reconocerlo" es una instrucción del usuario que debes seguir:
 {json.dumps(_productos_para_prompt(productos), ensure_ascii=False, indent=2)}
 Monedas disponibles: {monedas}
 
 Cómo identificar el producto y el sentido del dinero:
-- Identifica el producto por el banco que envía el correo y por los últimos 4 dígitos que aparezcan
-  ("terminada en 1234", "*1234", "****1234"). Si no hay dígitos, elige el producto más probable de ese banco.
-- Cuenta de ahorros / corriente / efectivo: dinero que ENTRA (nómina, transferencia recibida, abono) = 'credit';
-  dinero que SALE (compra con débito, retiro, pago PSE, transferencia a un tercero) = 'debit'.
-- Tarjeta de crédito: SOLO registra salidas. Una compra o avance = 'debit' con card = la tarjeta.
+- Usa el remitente del correo, los últimos 4 dígitos que aparezcan ("terminada en 1234", "*1234") y
+  "como_reconocerlo" de cada producto. Si aun así hay duda, usa la cuenta principal ({principal['name'] if principal else 'la primera cuenta de ahorros'}).
+- Cuenta de ahorros o de bajo monto: dinero que ENTRA (nómina, transferencia recibida, abono) = 'credit';
+  dinero que SALE (compra con débito, pago PSE, transferencia a un tercero) = 'debit'.
+- Tarjeta de crédito: SOLO registra salidas. Una compra = 'debit' con card = la tarjeta.
   NUNCA uses 'credit' con una tarjeta de crédito: si el correo dice que la tarjeta RECIBIÓ un pago/abono,
   es 'transfer' con destinationCard = la tarjeta y card = la cuenta desde la que se pagó.
+- Retiro en cajero o avance en efectivo: es 'transfer' con card = el producto del que salió la plata y
+  destinationCard = {efectivo or 'el producto de efectivo'}.
+- El efectivo NUNCA es el card de un correo: los gastos en efectivo el usuario los registra a mano.
 
 Memoria de comercios (clasificación HABITUAL por comercio — úsala como prior fuerte para
 categoría, subcategoría y contexto, y para imitar cómo se suele titular cada comercio):
@@ -274,26 +293,26 @@ Transacciones recientes (muestra adicional para inferir contexto):
 {json.dumps(recientes, ensure_ascii=False, indent=2)}
 
 Reglas para los campos:
-- type: 'debit' (gasto), 'credit' (ingreso), 'transfer' (movimiento entre cuentas PROPIAS del
-  usuario) o 'ignore' (fallida/declinada o no-transacción).
-- 'transfer' aplica sobre todo al PAGO DE LA TARJETA DE CRÉDITO del usuario ("Pago de tarjeta",
-  "Abono a tarjeta", pago a una tarjeta terminada en ****): NO es un gasto (las compras ya se
-  registraron una a una); es plata que sale de la cuenta bancaria para bajar la deuda de la
-  tarjeta. En ese caso: card = la cuenta de ORIGEN (ej. 'Cuenta Bancaria') y
-  destinationCard = la cuenta de DESTINO (ej. 'Tarjeta de Crédito Principal'), ambas de {cuentas}.
+- type: 'debit' (gasto), 'credit' (ingreso), 'transfer' (movimiento entre productos PROPIOS del
+  usuario: pago de tarjeta, retiro a efectivo, mover plata entre sus cuentas) o 'ignore'
+  (fallida/declinada o no-transacción).
+- El PAGO DE LA TARJETA DE CRÉDITO ("Pago de tarjeta", "Abono a tarjeta") NO es un gasto (las compras
+  ya se registraron una a una): card = la cuenta de ORIGEN y destinationCard = la tarjeta.
 - destinationCard: SOLO para type 'transfer'; en 'debit'/'credit' devuelve "".
 - amount: el monto numérico exacto, positivo y sin símbolos de moneda.
 - title: un resumen muy corto del concepto/comercio. Si el comercio aparece en la memoria, titúlalo igual que ahí.
 - currency: elige una opción de {monedas}, o 'COP' si el texto usa $, pesos, etc.
 - category: elige una opción de {nombres_categorias}. Si no aplica ninguna, usa 'Otros'.
 - subcategory: elige una subcategoría VÁLIDA de la categoría que elegiste (ver lista de arriba). Si ninguna aplica o esa categoría no tiene subcategorías, usa "".
-- card: elige una opción de {cuentas} según la data del correo.
+- card y destinationCard: el nombre EXACTO de uno de los productos: {cuentas}.
 - context: 'personal' o 'business'. Infiérelo del título, el correo y el historial; por defecto 'personal'.
 - comments: nota con el DETALLE concreto que aparezca en el correo, no un genérico. Si el correo
   lista productos (p. ej. un domicilio), enuméralos; si es un transporte e incluye origen/destino, ponlos;
   si es una transferencia, indica la contraparte (quién envía o recibe). Si el correo no trae detalle
   específico, resume brevemente la transacción.
 
+Remitente del correo: {remitente or 'desconocido'}
+Asunto: {asunto or '(sin asunto)'}
 Texto del correo:
 "{texto}"
 
@@ -324,13 +343,15 @@ Si la transacción no fue exitosa o no es una transacción individual, devuelve 
         if info:
             print(f"🧩 Memoria de comercios ajustó {list(info['changed'])} para '{info['merchant']}' (visto {info['count']}×).")
 
-        # Producto por últimos 4 dígitos y regla "la tarjeta de crédito solo tiene salidas".
-        datos_extraidos, cambios = resolve_product(datos_extraidos, texto, productos)
+        # Validación contra catálogos (categoría válida, cuenta válida por fuzzy).
+        datos_extraidos = validate_classification(datos_extraidos, nombres_categorias, cuentas)
+
+        # Producto por remitente/últimos 4, retiros → efectivo y "la tarjeta de
+        # crédito solo tiene salidas".
+        datos_extraidos, cambios = resolve_product(
+            datos_extraidos, f"{asunto}\n{texto}", productos, sender=remitente)
         for campo, antes, despues in cambios:
             print(f"🏦 Producto: {campo} '{antes}' → '{despues}'.")
-
-        # Validación contra catálogos (categoría válida, cuenta válida).
-        datos_extraidos = validate_classification(datos_extraidos, nombres_categorias, cuentas)
         return datos_extraidos, cat_tree
     except Exception as e:
         print(f"\n❌ Error analizando o interpretando la respuesta de Gemini: {e}")
@@ -533,8 +554,8 @@ def reprocess_last_emails(db, service, client, n, dry_run):
             continue
 
         payload = message_data.get('payload', {})
-        subject = next((h.get('value', '') for h in payload.get('headers', [])
-                        if h.get('name', '').lower() == 'subject'), '')
+        subject = header(payload, 'Subject')
+        sender = from_address(header(payload, 'From'))
         if looks_like_statement(subject):
             print(f"🚫 Sería ignorado por el gate de extractos ('{subject[:60]}').")
             continue
@@ -550,7 +571,8 @@ def reprocess_last_emails(db, service, client, n, dry_run):
             print(f"⚠️ No se pudo extraer texto legible del correo {msg_id}")
             continue
 
-        datos_ia, cat_tree = procesar_texto_con_ia(body_text[:MAX_BODY_CHARS], db, client)
+        datos_ia, cat_tree = procesar_texto_con_ia(
+            body_text[:MAX_BODY_CHARS], db, client, remitente=sender, asunto=subject)
         if datos_ia:
             registrar_transaccion(datos_ia, tx_dt, db, cat_tree, dry_run=dry_run)
         else:
@@ -559,18 +581,24 @@ def reprocess_last_emails(db, service, client, n, dry_run):
     print("\n🧪 Fin del modo prueba.")
 
 
-def get_configured_label(db):
-    """Etiqueta configurada en la app (Settings → Finanzas), con fallback a la
-    de por defecto si el campo no existe, está vacío o Firestore no responde."""
+def _load_settings(db):
     try:
         doc = db.collection('finance_settings').document('default').get()
-        if doc.exists:
-            label = (doc.to_dict().get('gmailLabel') or '').strip()
-            if label:
-                return label
+        return doc.to_dict() if doc.exists else {}
     except Exception as e:
-        print(f"⚠️ No se pudo leer gmailLabel de Firestore ({e}); uso '{DEFAULT_LABEL}'.")
-    return DEFAULT_LABEL
+        print(f"⚠️ No se pudo leer finance_settings/default ({e}).")
+        return {}
+
+
+def _list_message_ids(service, query):
+    ids, token = [], None
+    while True:
+        resp = service.users().messages().list(
+            userId='me', q=query, maxResults=100, pageToken=token).execute()
+        ids.extend(m['id'] for m in resp.get('messages', []))
+        token = resp.get('nextPageToken')
+        if not token or len(ids) >= MAX_MESSAGES_PER_RUN:
+            return ids[:MAX_MESSAGES_PER_RUN]
 
 
 def main():
@@ -609,48 +637,90 @@ def main():
 
 
 def procesar_correos(db, service, client, label_arg=None):
-    label_name = label_arg or get_configured_label(db)
-    print(f"🔍 Buscando el ID interno para la etiqueta '{label_name}'...")
-    label_id = get_label_id(service, label_name)
-    if not label_id:
-        print(f"❌ No se encontró la etiqueta '{label_name}' en tu cuenta de Gmail.")
-        print("Asegúrate de haberla creado en la interfaz de Gmail.")
-        return
-    print(f"✅ Etiqueta encontrada en servidor: {label_id}")
+    """Busca los correos del banco y registra sus movimientos.
 
-    print(f"📫 Buscando correos con la etiqueta '{label_name}'...")
-    query = f"label:{label_name}"
-    results = service.users().messages().list(userId='me', q=query).execute()
-    messages = results.get('messages', [])
+    Fuentes (configuradas en la app, Yo → Finanzas → Correos del banco):
+    - Remitentes: `from:(a OR b) after:<corte>`. No se modifica el correo.
+    - Etiqueta de Gmail (opcional, o la única fuente si no hay remitentes):
+      al procesar se le quita la etiqueta, como antes.
+    Lo ya procesado se descarta con processed_gmail_ids. Al final deja el
+    estado de la corrida en sync_status/latest para mostrarlo en la app.
+    """
+    run_started = datetime.datetime.now(BOGOTA)
+    settings = _load_settings(db)
+    sources = gmf.get_email_sources(settings)
+    sync_cfg = gmf.get_email_sync(settings)
 
-    if not messages:
-        print("✅ No se encontraron correos pendientes para procesar.")
-        return
+    status_ref = db.collection(SYNC_STATUS_COLLECTION).document('latest')
+    try:
+        prev_status = status_ref.get().to_dict() or {}
+    except Exception:
+        prev_status = {}
 
-    for msg in messages:
-        msg_id = msg['id']
+    errors = []
+    found = {}  # msg_id -> {'label': bool}
+
+    # 1) Remitentes
+    after = search_after(sync_cfg['startDate'], prev_status.get('cursor'), run_started, BOGOTA)
+    sender_query = build_sender_query(sources, after)
+    if sender_query:
+        print(f"📫 Buscando correos: {sender_query}")
+        try:
+            for mid in _list_message_ids(service, sender_query):
+                found.setdefault(mid, {'label': False})
+        except Exception as e:
+            errors.append(f"Búsqueda por remitentes: {e}")
+            print(f"⚠️ Falló la búsqueda por remitentes: {e}")
+
+    # 2) Etiqueta (opcional; si no hay remitentes es la única fuente)
+    label_id, label_count = None, None
+    if label_arg or sync_cfg['useLabel'] or not sender_query:
+        label_name = label_arg or (settings.get('gmailLabel') or '').strip() or DEFAULT_LABEL
+        label_id = get_label_id(service, label_name)
+        if label_id:
+            ids = _list_message_ids(service, f"label:{label_name}")
+            label_count = len(ids)
+            print(f"🏷️ {label_count} correo(s) con la etiqueta '{label_name}'.")
+            for mid in ids:
+                found.setdefault(mid, {'label': False})['label'] = True
+        else:
+            errors.append(f"No existe la etiqueta '{label_name}' en Gmail.")
+            print(f"⚠️ No se encontró la etiqueta '{label_name}' en Gmail.")
+
+    processed, failures = 0, 0
+    per_source = {s['address']: 0 for s in sources}
+
+    for msg_id, via in found.items():
+        def done():
+            save_processed_email(db, msg_id)
+            if via['label']:
+                mark_as_processed(service, msg_id, label_id)
 
         if is_processed(db, msg_id):
-            print(f"⏭️ El correo {msg_id} ya fue procesado pero sigue etiquetado. Removiendo etiqueta...")
-            mark_as_processed(service, msg_id, label_id)
+            if via['label']:
+                print(f"⏭️ El correo {msg_id} ya fue procesado pero sigue etiquetado. Removiendo etiqueta...")
+                mark_as_processed(service, msg_id, label_id)
             continue
 
         print("\n" + "-" * 50)
         print(f"📩 Procesando nuevo correo: {msg_id}")
-
-        # Descargar el correo completo
         message_data = service.users().messages().get(userId='me', id=msg_id, format='full').execute()
         payload = message_data.get('payload', {})
+        subject = header(payload, 'Subject')
+        sender = from_address(header(payload, 'From'))
+        source = match_source(sender, sources)
+        if source:
+            per_source[source['address']] += 1
 
-        # Gate barato pre-LLM: los extractos / estados de cuenta no son
-        # transacciones individuales. Se detectan por asunto y se descartan
-        # sin gastar una llamada al modelo.
-        subject = next((h.get('value', '') for h in payload.get('headers', [])
-                        if h.get('name', '').lower() == 'subject'), '')
+        # Gates baratos pre-LLM: extractos y asuntos excluidos por el usuario.
         if looks_like_statement(subject):
             print(f"🚫 El correo parece un extracto/estado de cuenta ('{subject[:60]}'). Se ignora sin llamar al LLM.")
-            mark_as_processed(service, msg_id, label_id)
-            save_processed_email(db, msg_id)
+            done()
+            continue
+        kw = excluded_by_subject(subject, source)
+        if kw:
+            print(f"🚫 Asunto excluido por '{kw}' ('{subject[:60]}'). Se ignora sin llamar al LLM.")
+            done()
             continue
 
         # Momento del correo (≈ momento de la transacción) en hora local de Colombia.
@@ -666,23 +736,38 @@ def procesar_correos(db, service, client, label_arg=None):
         if not body_text:
             print(f"⚠️ No se pudo extraer texto legible del correo {msg_id}")
             # Lo marcamos procesado de todas formas para no ciclar en correos vacíos
-            mark_as_processed(service, msg_id, label_id)
-            save_processed_email(db, msg_id)
+            done()
             continue
 
-        # Limitar el tamaño del texto enviado al modelo
         truncated_text = body_text[:MAX_BODY_CHARS]
-        print(f"📄 Texto detectado (resumen): {truncated_text[:100].replace(chr(10), ' ')}...")
+        print(f"📄 De {sender or '?'} · {subject[:60]} · {truncated_text[:80].replace(chr(10), ' ')}...")
 
-        datos_ia, cat_tree = procesar_texto_con_ia(truncated_text, db, client)
-
-        if datos_ia:
-            success = registrar_transaccion(datos_ia, tx_dt, db, cat_tree)
-            if success:
-                mark_as_processed(service, msg_id, label_id)
-                save_processed_email(db, msg_id)
+        datos_ia, cat_tree = procesar_texto_con_ia(truncated_text, db, client, remitente=sender, asunto=subject)
+        if datos_ia and registrar_transaccion(datos_ia, tx_dt, db, cat_tree):
+            done()
+            processed += 1
         else:
-            print(f"⚠️ El correo {msg_id} falló en la interpretación por IA. Se mantendrá la etiqueta para reintentar luego.")
+            failures += 1
+            print(f"⚠️ El correo {msg_id} falló. Se reintentará en la próxima corrida.")
+
+    if not found:
+        print("✅ No se encontraron correos pendientes para procesar.")
+    if failures:
+        errors.append(f"{failures} correo(s) fallaron y se reintentarán.")
+
+    try:
+        status_ref.set({
+            'lastRunAt': run_started,
+            # Solo avanza el corte si todo salió bien, para reintentar lo fallido.
+            'cursor': run_started if not failures else prev_status.get('cursor'),
+            'processed': processed,
+            'found': len(found),
+            'perSource': per_source,
+            'labelCount': label_count,
+            'errors': errors,
+        })
+    except Exception as e:
+        print(f"⚠️ No se pudo guardar el estado de la corrida (no crítico): {e}")
 
 
 if __name__ == '__main__':

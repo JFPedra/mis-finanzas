@@ -5,11 +5,16 @@ import { parseTransactionDate } from './financeHelpers';
 // ─────────────────────────────────────────────────
 
 export const PRODUCT_TYPES = {
-    savings:  { label: 'Cuenta de ahorros',  short: 'Ahorros',   icon: 'savings',         hue: 'olive' },
-    checking: { label: 'Cuenta corriente',   short: 'Corriente', icon: 'account_balance', hue: 'ink' },
-    credit:   { label: 'Tarjeta de crédito', short: 'Crédito',   icon: 'credit_card',     hue: 'plum' },
-    cash:     { label: 'Efectivo',           short: 'Efectivo',  icon: 'payments',        hue: 'amber' },
+    savings:  { label: 'Cuenta de ahorros',    short: 'Ahorros',    icon: 'savings',     hue: 'olive' },
+    lowvalue: { label: 'Cuenta de bajo monto', short: 'Bajo monto', icon: 'smartphone',  hue: 'clay' },
+    credit:   { label: 'Tarjeta de crédito',   short: 'Crédito',    icon: 'credit_card', hue: 'plum' },
+    cash:     { label: 'Efectivo',             short: 'Efectivo',   icon: 'payments',    hue: 'amber' },
 };
+
+// Tipos a los que aplica el 4x1000 y su tope exento en UVT/mes (art. 879 E.T.):
+// num. 1 → cuenta de ahorros, 350 UVT; num. 25 → depósitos de bajo monto, 65 UVT.
+export const GMF_EXEMPT_UVT_BY_TYPE = { savings: 350, lowvalue: 65 };
+export const isGmfEligible = (type) => type in GMF_EXEMPT_UVT_BY_TYPE;
 
 export const DEFAULT_GMF_THRESHOLDS = [80, 95];
 
@@ -29,9 +34,14 @@ export const DEFAULT_GMF = {
 export const inferProductType = (name = '') => {
     if (/cr[eé]dit|visa|master|amex/i.test(name)) return 'credit';
     if (/efectivo|cash/i.test(name)) return 'cash';
-    if (/corriente/i.test(name)) return 'checking';
+    if (/nequi|daviplata|movii|bajo monto|dale!?/i.test(name)) return 'lowvalue';
     return 'savings';
 };
+
+/** Lowercased address or domain, without a leading "@". */
+export const normalizeSender = (s = '') => String(s).trim().toLowerCase().replace(/^@+/, '');
+
+const normalizeSenders = (list) => [...new Set((Array.isArray(list) ? list : []).map(normalizeSender).filter(Boolean))];
 
 /**
  * Stable id derived from the name. The Python sync computes the same slug
@@ -55,12 +65,16 @@ export const normalizeProduct = (p) => {
     const type = PRODUCT_TYPES[p.type] ? p.type : inferProductType(p.name);
     const gmf = { ...DEFAULT_GMF, ...(p.gmf || {}) };
     gmf.thresholds = normalizeThresholds(gmf.thresholds);
+    const isCash = type === 'cash';
     return {
         name: p.name,
         type,
-        bank: p.bank || '',
-        last4: p.last4 || '',
-        gmf: type === 'savings' ? gmf : { ...DEFAULT_GMF, exempt: false },
+        principal: type === 'savings' && p.principal === true,
+        bank: isCash ? '' : (p.bank || ''),
+        last4: isCash ? '' : (p.last4 || ''),
+        senders: isCash ? [] : normalizeSenders(p.senders),
+        hints: isCash ? '' : (p.hints || ''),
+        gmf: isGmfEligible(type) ? gmf : { ...DEFAULT_GMF, exempt: false },
     };
 };
 
@@ -68,15 +82,47 @@ export const normalizeProduct = (p) => {
  * Financial products from the settings doc. `accounts` (plain names) stays the
  * ordered source of truth because older code and the Python sync read it;
  * `products` adds type/bank/GMF metadata keyed by name. Accounts without
- * metadata get an inferred type.
+ * metadata get an inferred type. At most one savings account is principal.
  */
 export const getProducts = (appConfig) => {
     const stored = Array.isArray(appConfig?.products) ? appConfig.products : [];
     const byName = new Map(stored.map(p => [p.name, p]));
     const accounts = Array.isArray(appConfig?.accounts) ? appConfig.accounts : [];
     const names = accounts.length ? accounts : stored.map(p => p.name);
-    return names.map(name => normalizeProduct(byName.get(name) || { name }));
+    let principalSeen = false;
+    return names.map(name => {
+        const p = normalizeProduct(byName.get(name) || { name });
+        if (p.principal && principalSeen) p.principal = false;
+        if (p.principal) principalSeen = true;
+        return p;
+    });
 };
+
+/** The principal savings account, falling back to the first savings one. */
+export const principalProduct = (products) =>
+    products.find(p => p.principal) || products.find(p => p.type === 'savings') || null;
+
+// ─────────────────────────────────────────────────
+// Remitentes de correo (qué correos lee el sync)
+// ─────────────────────────────────────────────────
+
+export const normalizeEmailSource = (s) => ({
+    address: normalizeSender(s.address),
+    name: (s.name || '').trim(),
+    enabled: s.enabled !== false,
+    excludeSubjects: [...new Set((Array.isArray(s.excludeSubjects) ? s.excludeSubjects : [])
+        .map(x => String(x).trim().toLowerCase()).filter(Boolean))],
+});
+
+export const getEmailSources = (appConfig) =>
+    (Array.isArray(appConfig?.emailSources) ? appConfig.emailSources : [])
+        .map(normalizeEmailSource)
+        .filter(s => s.address);
+
+export const getEmailSync = (appConfig) => ({
+    startDate: appConfig?.emailSync?.startDate || '',
+    useLabel: appConfig?.emailSync?.useLabel !== false,
+});
 
 // ─────────────────────────────────────────────────
 // Periodos (mensual / trimestral / semestral / anual)
@@ -187,8 +233,9 @@ export const productFlowsByPeriod = (transactions, productName, periods, gran, {
 // UVT oficial por año (DIAN). 2026: Resolución 000238 del 15-12-2025.
 // Mantener en sync con UVT_BY_YEAR en gmf.py.
 export const UVT_BY_YEAR = { 2024: 47065, 2025: 49799, 2026: 52374 };
-export const GMF_EXEMPT_UVT = 350;
 export const GMF_RATE = 0.004;
+
+export const gmfExemptUvt = (type) => GMF_EXEMPT_UVT_BY_TYPE[type] ?? GMF_EXEMPT_UVT_BY_TYPE.savings;
 
 /**
  * UVT for a year: user override first, then the official table. For a year
@@ -209,7 +256,8 @@ export const gmfMonthlyLimit = (product, year, uvtOverrides = {}) => {
         return { limit: Number(g.manualLimit), source: 'manual', uvt: null };
     }
     const uvt = uvtFor(year, uvtOverrides);
-    return { limit: Math.round(GMF_EXEMPT_UVT * uvt.value), source: uvt.source === 'estimada' ? 'uvt-estimada' : 'uvt', uvt: uvt.value };
+    const uvtCount = gmfExemptUvt(product?.type);
+    return { limit: Math.round(uvtCount * uvt.value), source: uvt.source === 'estimada' ? 'uvt-estimada' : 'uvt', uvt: uvt.value, uvtCount };
 };
 
 /**
