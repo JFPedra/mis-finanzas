@@ -136,20 +136,54 @@ _LAST4_RE = re.compile(
 )
 
 
+# Retiro de cajero / avance en efectivo: la plata pasa de un producto al efectivo.
+_WITHDRAWAL_RE = re.compile(r"\bretir(o|aste|a)\b|\bcajero\b|\bATM\b|avance en efectivo", re.IGNORECASE)
+
+_BANK_TYPES = ("savings", "lowvalue", "credit")
+
+
+def sender_matches(from_address, pattern):
+    """`pattern` es una dirección exacta o un dominio (acepta subdominios)."""
+    addr = (from_address or "").strip().lower()
+    pat = (pattern or "").strip().lower().lstrip("@")
+    if not addr or not pat:
+        return False
+    if "@" in pat:
+        return addr == pat
+    domain = addr.rsplit("@", 1)[-1]
+    return domain == pat or domain.endswith("." + pat)
+
+
 def _mentioned_products(text, products):
     """Productos cuyo `last4` aparece en el correo en contexto de tarjeta/cuenta."""
     digits = {m.group(1) for m in _LAST4_RE.finditer(text or "")}
     return [p for p in products if p.get("last4") and p["last4"] in digits]
 
 
-def resolve_product(datos, text, products):
-    """Post-corrección determinista de la cuenta con el catálogo de productos:
+def _principal(products):
+    return next((p for p in products if p.get("principal")), None) or \
+        next((p for p in products if p["type"] == "savings"), None)
 
-    1. Si el correo menciona los últimos 4 dígitos de exactamente un producto,
-       ese es el producto del movimiento (origen, o destino en un pago de tarjeta).
-    2. Una tarjeta de crédito solo tiene salidas: un 'credit' sobre la tarjeta
-       es un pago/abono recibido → 'transfer' desde la cuenta pagadora por
-       defecto (el primer producto de ahorros/corriente) hacia la tarjeta.
+
+def _change(out, changes, field, value):
+    if out.get(field) != value:
+        changes.append((field, out.get(field), value))
+        out[field] = value
+
+
+def resolve_product(datos, text, products, sender=""):
+    """Post-corrección determinista de la cuenta con el catálogo de productos.
+
+    1. Candidatos: los productos bancarios asociados al remitente del correo
+       (si ninguno lo está, todos los productos bancarios).
+    2. Entre los candidatos, si el correo menciona los últimos 4 dígitos de
+       exactamente uno, o si solo hay un candidato por remitente, ese es el
+       producto (origen, o destino si es un pago a una tarjeta de crédito).
+    3. Retiro de cajero / avance → 'transfer' del producto hacia Efectivo.
+    4. Efectivo nunca es el origen de un correo (esos gastos van a mano): se
+       reasigna al candidato o a la cuenta principal.
+    5. Tarjeta de crédito solo tiene salidas: un 'credit' sobre la tarjeta es
+       un pago recibido → 'transfer' desde la cuenta principal hacia la tarjeta.
 
     Devuelve (datos_corregidos, [cambios]). Pura.
     """
@@ -158,26 +192,39 @@ def resolve_product(datos, text, products):
     out = dict(datos)
     changes = []
     by_name = {p["name"]: p for p in products}
+    bank_products = [p for p in products if p["type"] in _BANK_TYPES]
+    cash = next((p for p in products if p["type"] == "cash"), None)
+    principal = _principal(products)
 
-    mentioned = _mentioned_products(text, products)
-    if len(mentioned) == 1:
-        match = mentioned[0]["name"]
-        if out.get("type") == "transfer" and by_name.get(match, {}).get("type") == "credit":
-            if out.get("destinationCard") != match:
-                changes.append(("destinationCard", out.get("destinationCard"), match))
-                out["destinationCard"] = match
-        elif out.get("card") != match:
-            changes.append(("card", out.get("card"), match))
-            out["card"] = match
+    by_sender = [p for p in bank_products if any(sender_matches(sender, s) for s in p.get("senders", []))]
+    candidates = by_sender or bank_products
 
+    mentioned = _mentioned_products(text, candidates)
+    match = mentioned[0] if len(mentioned) == 1 else (by_sender[0] if len(by_sender) == 1 else None)
+    if match:
+        if out.get("type") == "transfer" and match["type"] == "credit":
+            _change(out, changes, "destinationCard", match["name"])
+        else:
+            _change(out, changes, "card", match["name"])
+
+    # Retiro de cajero: sale del producto y entra al efectivo.
+    if cash and out.get("type") == "debit" and _WITHDRAWAL_RE.search(text or ""):
+        _change(out, changes, "type", "transfer")
+        _change(out, changes, "destinationCard", cash["name"])
+
+    # Un correo nunca sale del efectivo.
+    origin = by_name.get(out.get("card"))
+    if origin is None or origin["type"] == "cash":
+        fallback = match or (by_sender[0] if by_sender else None) or principal
+        if fallback:
+            _change(out, changes, "card", fallback["name"])
+
+    # Tarjeta de crédito: solo salidas.
     card = by_name.get(out.get("card"))
-    if card and card["type"] == "credit" and out.get("type") == "credit":
-        payer = next((p["name"] for p in products if p["type"] in ("savings", "checking")), None)
-        if payer:
-            changes.append(("type", "credit", "transfer"))
-            out["type"] = "transfer"
-            out["destinationCard"] = card["name"]
-            out["card"] = payer
+    if card and card["type"] == "credit" and out.get("type") == "credit" and principal:
+        _change(out, changes, "type", "transfer")
+        out["destinationCard"] = card["name"]
+        out["card"] = principal["name"]
 
     if out.get("type") != "transfer":
         out["destinationCard"] = ""

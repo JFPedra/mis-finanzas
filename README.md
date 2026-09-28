@@ -29,10 +29,13 @@ Push notification: "nuevo movimiento por revisar"
 - **Registro manual**: gastos, ingresos y transferencias entre tus productos desde el botón +.
 - **Radiografía**: pulso de los últimos 30 días, racha de registro, comparativos con el mes anterior, gasto por categoría (con mapa de calor diario) y avisos inteligentes.
 - **Movimientos**: lista con filtros (fechas, categoría, cuenta, monto, tipo, pendientes), evolución de saldo por moneda y análisis por categoría/cuenta.
-- **Productos financieros** (Yo → Finanzas → Productos): cuentas de ahorros, corrientes, tarjetas de crédito y efectivo, con banco y últimos 4 dígitos. Gemini usa esos datos para asignar cada correo al producto correcto; en una tarjeta de crédito solo se registran salidas (un pago recibido por la tarjeta se guarda como transferencia desde tu cuenta).
+- **Productos financieros** (Yo → Finanzas → Productos): cuentas de ahorros (una principal), cuentas de bajo monto, tarjetas de crédito (varias) y efectivo. Para cada producto se configura cómo lo reconoce Gemini: banco, últimos 4 dígitos, remitentes y una instrucción libre ("Cómo reconocerlo").
+  - Tarjeta de crédito: solo salidas; un pago recibido por la tarjeta se guarda como transferencia desde tu cuenta.
+  - Efectivo: un retiro de cajero se guarda como transferencia de la cuenta hacia Efectivo; los gastos en efectivo se registran a mano.
+- **Correos del banco** (Yo → Finanzas): lista de remitentes (dirección o dominio) que el sync busca en Gmail, con asuntos a ignorar, fecha de inicio y la etiqueta de Gmail como opción adicional. Muestra el estado de la última sincronización.
 - **Cuentas → Total**: historial de ingresos y egresos mensual (por defecto), trimestral, semestral o anual, sin discriminar producto.
 - **Cuentas → Por producto**: el mismo historial para cada cuenta o tarjeta (incluye las transferencias entre tus productos).
-- **Cuentas → 4x1000**: tope exento del mes por cuenta marcada como exenta, cuánto has movido, cuánto te queda, proyección a fin de mes y 4x1000 estimado de las cuentas sin exención.
+- **Cuentas → 4x1000**: tope exento del mes por cuenta de ahorros o de bajo monto marcada como exenta, cuánto has movido, cuánto te queda, proyección a fin de mes y 4x1000 estimado de las cuentas sin exención.
 - **Alertas del 4x1000**: push configurable por producto (por defecto al 80% y 95%, y siempre al superar el 100%), además del aviso en Radiografía.
 - **Presupuestos y metas**: límites por categoría con ritmo del mes, metas de ahorro vinculadas a una cuenta y flujo por periodo libre.
 - **Notificaciones push** de movimientos pendientes (deep link a la edición).
@@ -120,10 +123,11 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python bootstrap_token.py       # sube el token a Firestore (gmail_auth/token)
 ```
 
-En Gmail (esa misma cuenta — las etiquetas son por cuenta):
+Qué correos se leen — en la app, Yo → Finanzas → **Correos del banco**: agregar la dirección (o el dominio) desde la que el banco envía las alertas. Copiarla de un correo real del banco. El sync busca `from:(…) after:<corte>` en cada corrida.
 
-- Crear la etiqueta anidada **`Bancos/PendingBot`**.
-- Crear un filtro: remitente del banco → aplicar esa etiqueta.
+Opcional, como respaldo (esa misma cuenta de Gmail — las etiquetas son por cuenta):
+
+- Crear la etiqueta anidada **`Bancos/PendingBot`** y un filtro "remitente del banco → aplicar esa etiqueta". Sin remitentes configurados, la etiqueta es la única fuente (comportamiento original).
 
 Probar de una vez, sin esperar al cron:
 
@@ -181,10 +185,18 @@ Cambiar a `true` restaura el módulo completo. Ojo: con `business: false`, una t
 
 ## 4x1000 (GMF)
 
-- **Tope**: 350 UVT al mes (art. 879 num. 1 del E.T.). La UVT oficial por año está en `UVT_BY_YEAR` de `accountHelpers.js` y `gmf.py` (2026: $52.374, Resolución DIAN 000238 de 2025 → tope $18.330.900). No hay una API oficial de la DIAN para consultarla; cuando salga la UVT de un año nuevo, se fija en Yo → Finanzas → 4x1000 · UVT (y conviene actualizar las dos tablas). Cada cuenta también admite un tope manual.
+- **Solo cuentas de ahorros y de bajo monto**: efectivo y tarjetas de crédito no tienen tope propio; lo que cuenta es la plata que sale de la cuenta hacia ellos (retiro de cajero, pago de tarjeta).
+- **Tope**: cuenta de ahorros 350 UVT al mes (art. 879 num. 1 del E.T.; una exenta por persona) y depósito de bajo monto 65 UVT al mes (num. 25; una exenta por entidad). La UVT oficial por año está en `UVT_BY_YEAR` de `accountHelpers.js` y `gmf.py` (2026: $52.374, Resolución DIAN 000238 de 2025 → topes $18.330.900 y $3.404.310). No hay una API oficial de la DIAN para consultarla; cuando salga la UVT de un año nuevo, se fija en Yo → Finanzas → 4x1000 · UVT (y conviene actualizar las dos tablas). Cada cuenta también admite un tope manual.
 - **Qué suma**: compras, retiros y transferencias que salen de la cuenta en el mes calendario, en COP. Es una estimación: el banco puede excluir algunos movimientos.
 - **Alertas**: el cron del sync (cada ~10 min) revisa las cuentas exentas con avisos activos y envía una push por cada umbral nuevo cruzado en el mes. Lo ya notificado queda en `gmf_alerts/{producto}_{YYYY-MM}`, así que no se repite.
-- **Datos**: los productos viven en `finance_settings/default.products` (tipo, banco, últimos 4, config GMF); `accounts` se mantiene como la lista de nombres que usa el resto del código. Renombrar un producto re-apunta sus movimientos y metas al nombre nuevo.
+- **Datos**: los productos viven en `finance_settings/default.products` (tipo, principal, banco, últimos 4, remitentes, pistas, config GMF); `accounts` se mantiene como la lista de nombres que usa el resto del código. Renombrar un producto re-apunta sus movimientos y metas al nombre nuevo.
+
+## Cómo se asigna cada correo a un producto
+
+1. **Qué correos**: `finance_settings/default.emailSources` (remitentes) + `emailSync` (fecha de inicio, usar etiqueta). El corte de búsqueda es la última corrida exitosa − 2 días; lo repetido se descarta con `processed_gmail_ids`. El estado de cada corrida queda en `sync_status/latest`.
+2. **Gemini** recibe remitente, asunto y cuerpo del correo, y el catálogo de productos con sus pistas.
+3. **Corrección determinista** (`tx_enrich.resolve_product`): los productos del remitente son los candidatos; entre ellos, los últimos 4 dígitos desempatan. Retiros → transferencia a Efectivo; Efectivo nunca es origen de un correo; un ingreso a una tarjeta de crédito es un pago desde la cuenta principal.
+4. Todo queda **pendiente de revisión** en la app, donde se corrige a mano si hace falta.
 
 ---
 
@@ -220,6 +232,7 @@ gh run view <id> --log-failed             # depurar una corrida fallida
 ├── gmail_finanzas_sync.py    # Pipeline: Gmail → Gemini → Firestore (+ alertas 4x1000)
 ├── tx_enrich.py              # Correcciones deterministas (memoria de comercios, producto por últimos 4)
 ├── gmf.py                    # Productos y alertas del 4x1000
+├── email_query.py            # Qué correos se leen (remitentes + etiqueta)
 ├── bootstrap_token.py        # Una vez: sembrar/renovar el token de Gmail
 ├── send_test_push.py         # Prueba end-to-end de notificaciones
 ├── firestore.rules           # Reglas de seguridad (whitelist)

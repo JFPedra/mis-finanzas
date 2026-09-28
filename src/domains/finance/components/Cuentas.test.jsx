@@ -4,6 +4,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { getProducts } from '../utils/accountHelpers';
 
 const appConfig = {
+  emailSources: [{ address: 'alertas@bancolombia.com.co', name: 'Bancolombia' }],
+  emailSync: { startDate: '2026-09-01', useLabel: true },
   accounts: ['Bancolombia Ahorros', 'Visa Oro', 'Efectivo'],
   products: [
     { name: 'Bancolombia Ahorros', type: 'savings', bank: 'Bancolombia', last4: '1234', gmf: { exempt: true, alertsEnabled: true, thresholds: [80, 95] } },
@@ -42,7 +44,7 @@ vi.mock('../../../context/FinanceContext', () => ({
 }));
 
 import Cuentas from './Cuentas';
-import { ProductsSection, GmfConfigSection } from '../../../components/ProductsSection';
+import { ProductsSection, GmfConfigSection, EmailSourcesSection } from '../../../components/ProductsSection';
 
 describe('Cuentas view', () => {
   beforeEach(() => {
@@ -78,7 +80,24 @@ describe('ProductsSection', () => {
     expect(screen.getByText('Exenta 4x1000')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Agregar'));
     expect(screen.getByText('Nuevo producto')).toBeInTheDocument();
-    expect(screen.getByText('Marcada como exenta del 4x1000')).toBeInTheDocument();
+    expect(screen.getByText('Exenta del 4x1000')).toBeInTheDocument();
+    expect(screen.getByText('Cuenta principal')).toBeInTheDocument();
+    expect(screen.getByText('Bancolombia')).toBeInTheDocument();
+  });
+
+  it('hides bank identification fields for cash', () => {
+    render(<ProductsSection />);
+    fireEvent.click(screen.getByText('Agregar'));
+    fireEvent.click(screen.getByText('Efectivo', { selector: 'button' }));
+    expect(screen.queryByText('Cómo lo identifica Gemini')).not.toBeInTheDocument();
+    expect(screen.queryByText('Exenta del 4x1000')).not.toBeInTheDocument();
+  });
+
+  it('renders the email sources with the sync settings', () => {
+    render(<EmailSourcesSection />);
+    expect(screen.getByText('alertas@bancolombia.com.co')).toBeInTheDocument();
+    expect(screen.getByText('Leer correos desde')).toBeInTheDocument();
+    expect(screen.getByText('También leer la etiqueta de Gmail')).toBeInTheDocument();
   });
 
   it('renders the UVT config', () => {

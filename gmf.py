@@ -10,10 +10,12 @@ import unicodedata
 # UVT oficial por año (DIAN). 2026: Resolución 000238 del 15-12-2025.
 # Mantener en sync con UVT_BY_YEAR en accountHelpers.js.
 UVT_BY_YEAR = {2024: 47065, 2025: 49799, 2026: 52374}
-GMF_EXEMPT_UVT = 350
+# Tope exento en UVT/mes por tipo (art. 879 E.T.): num. 1 cuenta de ahorros,
+# num. 25 depósitos de bajo monto. Efectivo y tarjetas de crédito no aplican.
+GMF_EXEMPT_UVT_BY_TYPE = {'savings': 350, 'lowvalue': 65}
 GMF_RATE = 0.004
 DEFAULT_THRESHOLDS = [80, 95]
-PRODUCT_TYPES = ('savings', 'checking', 'credit', 'cash')
+PRODUCT_TYPES = ('savings', 'lowvalue', 'credit', 'cash')
 
 ALERTS_COLLECTION = 'gmf_alerts'
 
@@ -30,9 +32,13 @@ def infer_product_type(name):
         return 'credit'
     if re.search(r'efectivo|cash', n, re.I):
         return 'cash'
-    if re.search(r'corriente', n, re.I):
-        return 'checking'
+    if re.search(r'nequi|daviplata|movii|bajo monto|dale!?', n, re.I):
+        return 'lowvalue'
     return 'savings'
+
+
+def normalize_sender(s):
+    return str(s or '').strip().lower().lstrip('@')
 
 
 def _thresholds(raw):
@@ -56,17 +62,26 @@ def get_products(settings):
     names = settings.get('accounts') or [p.get('name') for p in stored if isinstance(p, dict)]
 
     products = []
+    principal_seen = False
     for name in names:
         p = by_name.get(name) or {'name': name}
         ptype = p.get('type') if p.get('type') in PRODUCT_TYPES else infer_product_type(name)
+        is_cash = ptype == 'cash'
+        principal = ptype == 'savings' and p.get('principal') is True and not principal_seen
+        principal_seen = principal_seen or principal
+        senders = [] if is_cash else list(dict.fromkeys(
+            normalize_sender(s) for s in (p.get('senders') or []) if normalize_sender(s)))
         gmf = dict(p.get('gmf') or {})
         products.append({
             'name': name,
             'type': ptype,
-            'bank': p.get('bank') or '',
-            'last4': p.get('last4') or '',
+            'principal': principal,
+            'bank': '' if is_cash else (p.get('bank') or ''),
+            'last4': '' if is_cash else (p.get('last4') or ''),
+            'senders': senders,
+            'hints': '' if is_cash else (p.get('hints') or ''),
             'gmf': {
-                'exempt': ptype == 'savings' and bool(gmf.get('exempt')),
+                'exempt': ptype in GMF_EXEMPT_UVT_BY_TYPE and bool(gmf.get('exempt')),
                 'limitMode': gmf.get('limitMode') or 'uvt',
                 'manualLimit': gmf.get('manualLimit'),
                 'alertsEnabled': gmf.get('alertsEnabled', True) is not False,
@@ -74,6 +89,38 @@ def get_products(settings):
             },
         })
     return products
+
+
+def principal_product(products):
+    """Cuenta de ahorros principal; si no hay, la primera de ahorros."""
+    return next((p for p in products if p.get('principal')), None) or \
+        next((p for p in products if p['type'] == 'savings'), None)
+
+
+def get_email_sources(settings):
+    out = []
+    for s in (settings or {}).get('emailSources') or []:
+        if not isinstance(s, dict):
+            continue
+        address = normalize_sender(s.get('address'))
+        if not address:
+            continue
+        out.append({
+            'address': address,
+            'name': (s.get('name') or '').strip(),
+            'enabled': s.get('enabled') is not False,
+            'excludeSubjects': list(dict.fromkeys(
+                str(x).strip().lower() for x in (s.get('excludeSubjects') or []) if str(x).strip())),
+        })
+    return out
+
+
+def get_email_sync(settings):
+    sync = (settings or {}).get('emailSync') or {}
+    return {
+        'startDate': sync.get('startDate') or '',
+        'useLabel': sync.get('useLabel') is not False,
+    }
 
 
 def uvt_for(year, overrides=None):
@@ -97,7 +144,8 @@ def monthly_limit(product, year, overrides=None):
         manual = 0
     if g.get('limitMode') == 'manual' and manual > 0:
         return manual
-    return round(GMF_EXEMPT_UVT * uvt_for(year, overrides))
+    uvts = GMF_EXEMPT_UVT_BY_TYPE.get(product.get('type'), GMF_EXEMPT_UVT_BY_TYPE['savings'])
+    return round(uvts * uvt_for(year, overrides))
 
 
 def outflows_in_month(transactions, product_name, year, month):
@@ -159,7 +207,7 @@ def check_gmf_alerts(db, now, send_push, dry_run=False):
     snap = db.collection('finance_settings').document('default').get()
     settings = snap.to_dict() if snap.exists else {}
     products = [p for p in get_products(settings)
-                if p['type'] == 'savings' and p['gmf']['exempt'] and p['gmf']['alertsEnabled']]
+                if p['type'] in GMF_EXEMPT_UVT_BY_TYPE and p['gmf']['exempt'] and p['gmf']['alertsEnabled']]
     if not products:
         return
 

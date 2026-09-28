@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { Icon, Card, Eyebrow, Segmented } from '../shared/ds/Primitives';
 import ConfirmModal from '../shared/components/ConfirmModal';
 import { FEATURES } from '../config/features';
-import { ProductsSection, GmfConfigSection } from './ProductsSection';
+import { ProductsSection, GmfConfigSection, EmailSourcesSection } from './ProductsSection';
 
 const INPUT_STYLE = {
     flex: 1, padding: '9px 12px',
@@ -697,24 +697,18 @@ const NotificationsSection = ({ push }) => {
 
 // Config de instancia (etiqueta de Gmail del sync, tasa USD→COP) guardada en
 // finance_settings/default junto a los catálogos, vía el mismo updateAppConfig.
-const InstanceConfigSection = ({ appConfig, updateAppConfig }) => {
-    const [gmailLabel, setGmailLabel] = useState(appConfig.gmailLabel ?? '');
+const InstanceConfigSection = ({ appConfig, patchAppConfig }) => {
     const [exchangeRate, setExchangeRate] = useState(appConfig.exchangeRate != null ? String(appConfig.exchangeRate) : '');
     const [saving, setSaving] = useState(false);
 
-    // Resincroniza los inputs cuando el config termina de cargar de Firestore.
-    useEffect(() => { setGmailLabel(appConfig.gmailLabel ?? ''); }, [appConfig.gmailLabel]);
+    // Resincroniza el input cuando el config termina de cargar de Firestore.
     useEffect(() => { setExchangeRate(appConfig.exchangeRate != null ? String(appConfig.exchangeRate) : ''); }, [appConfig.exchangeRate]);
 
     const handleSave = async () => {
         setSaving(true);
         try {
             const rate = Number(exchangeRate);
-            await updateAppConfig({
-                ...appConfig,
-                gmailLabel: gmailLabel.trim(),
-                exchangeRate: rate > 0 ? rate : null,
-            });
+            await patchAppConfig({ exchangeRate: rate > 0 ? rate : null });
         } catch (error) { console.error("Error guardando config de instancia:", error); }
         finally { setSaving(false); }
     };
@@ -734,22 +728,10 @@ const InstanceConfigSection = ({ appConfig, updateAppConfig }) => {
         }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
                 <Icon name="tune" size={20} color="var(--clay-500)" />
-                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--fg-1)' }}>Sincronización y moneda</h3>
+                <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: 'var(--fg-1)' }}>Moneda</h3>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                    <span style={FIELD_LABEL}>Etiqueta de Gmail del sync</span>
-                    <input
-                        type="text"
-                        placeholder="Bancos/PendingBot"
-                        style={INPUT_STYLE}
-                        value={gmailLabel}
-                        onChange={e => setGmailLabel(e.target.value)}
-                        disabled={saving}
-                    />
-                    <p style={HINT}>Etiqueta que el pipeline busca en Gmail. Vacío = usar la de por defecto (Bancos/PendingBot).</p>
-                </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     <span style={FIELD_LABEL}>Tasa de cambio USD → COP</span>
                     <input
@@ -913,7 +895,7 @@ const WhitelistSection = () => {
 };
 
 export default function Settings({ push, initialTab }) {
-    const { appConfig, updateAppConfig } = useFinance();
+    const { appConfig, updateAppConfig, patchAppConfig } = useFinance();
     const { currentUser, logout } = useAuth();
     const [saving, setSaving] = useState(false);
     const [newCurrency, setNewCurrency] = useState('');
@@ -1029,6 +1011,7 @@ export default function Settings({ push, initialTab }) {
             {/* Products */}
             <Eyebrow style={{ paddingLeft: 4, marginTop: 4 }}>Productos</Eyebrow>
             <ProductsSection />
+            <EmailSourcesSection />
 
             {/* Catalogs */}
             <Eyebrow style={{ paddingLeft: 4, marginTop: 4 }}>Catálogos</Eyebrow>
@@ -1056,7 +1039,7 @@ export default function Settings({ push, initialTab }) {
             <div style={{
                 display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14,
             }}>
-                <InstanceConfigSection appConfig={appConfig} updateAppConfig={updateAppConfig} />
+                <InstanceConfigSection appConfig={appConfig} patchAppConfig={patchAppConfig} />
                 <GmfConfigSection />
             </div>
 

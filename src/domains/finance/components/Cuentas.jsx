@@ -6,7 +6,7 @@ import {
 } from '../../../shared/ds/Primitives';
 import ContextSwitcher from './ContextSwitcher';
 import {
-  PRODUCT_TYPES, GRANULARITIES, GMF_EXEMPT_UVT, GMF_RATE,
+  PRODUCT_TYPES, GRANULARITIES, GMF_RATE, isGmfEligible, gmfExemptUvt,
   buildPeriods, totalFlowsByPeriod, productFlowsByPeriod, gmfStatus, gmfMonthlyUsage, uvtFor,
 } from '../utils/accountHelpers';
 
@@ -187,11 +187,11 @@ function GmfCard({ product, status, onOpenProduct }) {
   return (
     <Card padding={18} style={{ borderRadius: 22 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <IconTile icon="savings" hue="olive" size={36} />
+        <IconTile icon={PRODUCT_TYPES[product.type].icon} hue={PRODUCT_TYPES[product.type].hue} size={36} />
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--fg-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{product.name}</div>
           <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>
-            Tope {formatCurrency(status.limit, 'COP')} · {status.source === 'manual' ? 'fijado a mano' : `${GMF_EXEMPT_UVT} UVT`}
+            {PRODUCT_TYPES[product.type].short} · tope {formatCurrency(status.limit, 'COP')} · {status.source === 'manual' ? 'fijado a mano' : `${status.uvtCount} UVT`}
           </div>
         </div>
         <Pill variant={pill.variant}>{pill.label}</Pill>
@@ -287,8 +287,25 @@ export default function Cuentas({ initialTab, onNavigate }) {
   }).filter(x => x.row.count > 0), [products, transactions, selectedPeriod, gran, currency]);
 
   const uvtOverrides = appConfig?.uvtOverrides;
-  const exempt = useMemo(() => products.filter(p => p.type === 'savings' && p.gmf.exempt), [products]);
-  const nonExempt = useMemo(() => products.filter(p => p.type === 'savings' && !p.gmf.exempt), [products]);
+  const exempt = useMemo(() => products.filter(p => isGmfEligible(p.type) && p.gmf.exempt), [products]);
+  const nonExempt = useMemo(() => products.filter(p => isGmfEligible(p.type) && !p.gmf.exempt), [products]);
+
+  // La ley permite una cuenta de ahorros exenta por persona y un depósito de
+  // bajo monto exento por entidad.
+  const exemptWarnings = useMemo(() => {
+    const out = [];
+    const savings = exempt.filter(p => p.type === 'savings');
+    if (savings.length > 1) out.push(`Tienes ${savings.length} cuentas de ahorros marcadas como exentas. La ley permite una sola por persona: revisa cuál registraste en el banco.`);
+    const byBank = {};
+    exempt.filter(p => p.type === 'lowvalue' && p.bank).forEach(p => {
+      const k = p.bank.trim().toLowerCase();
+      byBank[k] = [...(byBank[k] || []), p.name];
+    });
+    Object.values(byBank).filter(n => n.length > 1).forEach(names => {
+      out.push(`${names.join(' y ')} son de la misma entidad. Solo un depósito de bajo monto por entidad puede ser exento.`);
+    });
+    return out;
+  }, [exempt]);
   const gmf = useMemo(
     () => exempt.map(p => ({ product: p, status: gmfStatus(p, transactions, now, uvtOverrides) })),
     [exempt, transactions, now, uvtOverrides]);
@@ -408,7 +425,7 @@ export default function Cuentas({ initialTab, onNavigate }) {
                     {[PRODUCT_TYPES[product.type].label, product.bank, product.last4 ? `•••• ${product.last4}` : ''].filter(Boolean).join(' · ')}
                   </div>
                 </div>
-                {product.type === 'savings' && product.gmf.exempt ? (
+                {product.gmf.exempt ? (
                   <button type="button" onClick={() => setTab('gmf')} style={{ background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}>
                     <Pill variant="olive" icon="receipt_long">Exenta 4x1000</Pill>
                   </button>
@@ -435,14 +452,23 @@ export default function Cuentas({ initialTab, onNavigate }) {
           <>
             <Card padding={20} style={{ background: 'var(--ink-800)', color: '#fff', borderRadius: 24 }}>
               <Eyebrow style={{ color: 'rgba(255,255,255,0.55)' }}>4x1000 · {monthName}</Eyebrow>
-              <div style={{ marginTop: 10, fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Tope exento por mes</div>
-              <div style={{ fontSize: 30, fontWeight: 800, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
-                {formatCurrency(Math.round(GMF_EXEMPT_UVT * uvt.value), 'COP')}
+              <div style={{ marginTop: 10, fontSize: 13, color: 'rgba(255,255,255,0.7)' }}>Topes exentos por mes</div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginTop: 4 }}>
+                {['savings', 'lowvalue'].map(type => (
+                  <div key={type}>
+                    <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+                      {formatCurrency(Math.round(gmfExemptUvt(type) * uvt.value), 'COP')}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'rgba(255,255,255,0.6)' }}>
+                      {PRODUCT_TYPES[type].label} · {gmfExemptUvt(type)} UVT
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div style={{ marginTop: 6, fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>
-                {GMF_EXEMPT_UVT} UVT × {formatCurrency(uvt.value, 'COP')}
-                {uvt.source === 'oficial' ? ' (UVT oficial DIAN)' : uvt.source === 'manual' ? ' (UVT fijada a mano)' : ' (UVT del último año conocido)'}.
-                {' '}Lo que retires por encima paga 4 pesos por cada mil.
+              <div style={{ marginTop: 10, fontSize: 12, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5 }}>
+                UVT {now.getFullYear()}: {formatCurrency(uvt.value, 'COP')}
+                {uvt.source === 'oficial' ? ' (oficial DIAN)' : uvt.source === 'manual' ? ' (fijada a mano)' : ' (del último año conocido)'}.
+                {' '}Solo cuentan las salidas de tus cuentas de ahorros y de bajo monto; lo que pase del tope paga 4 pesos por cada mil.
               </div>
             </Card>
 
@@ -470,13 +496,11 @@ export default function Cuentas({ initialTab, onNavigate }) {
               </div>
             )}
 
-            {gmf.length > 1 ? (
-              <Card padding={14} style={{ borderRadius: 18, borderLeft: '4px solid var(--warning-500)' }}>
-                <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
-                  Tienes {gmf.length} cuentas marcadas como exentas. La ley permite una sola por persona: revisa cuál registraste en el banco.
-                </div>
+            {exemptWarnings.map(msg => (
+              <Card key={msg} padding={14} style={{ borderRadius: 18, borderLeft: '4px solid var(--warning-500)' }}>
+                <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>{msg}</div>
               </Card>
-            ) : null}
+            ))}
 
             {nonExempt.length > 0 ? (
               <>
@@ -486,7 +510,7 @@ export default function Cuentas({ initialTab, onNavigate }) {
                     const { used } = gmfMonthlyUsage(transactions, p.name, now);
                     return (
                       <div key={p.name} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 10px' }}>
-                        <IconTile icon="savings" hue="ink" size={32} />
+                        <IconTile icon={PRODUCT_TYPES[p.type].icon} hue="ink" size={32} />
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-1)' }}>{p.name}</div>
                           <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>Movido {formatCurrency(used, 'COP')}</div>
