@@ -215,7 +215,7 @@ export const Segmented = ({ options, value, onChange, size = 'md' }) => {
               padding: pads, fontSize: font, fontWeight: active ? 800 : 600,
               fontFamily: 'inherit',
               background: active ? 'var(--bg-raised)' : 'transparent',
-              color: active ? 'var(--ink-800)' : 'var(--fg-3)',
+              color: active ? 'var(--fg-1)' : 'var(--fg-3)',
               borderRadius: 9,
               boxShadow: active ? 'var(--shadow-xs)' : 'none',
               transition: `all var(--dur-fast) var(--ease-out)`,

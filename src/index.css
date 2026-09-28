@@ -4,80 +4,80 @@
 
 /* =========================================================================
    Mis Finanzas — Design System Foundations
-   Warm earthy palette · Plus Jakarta Sans · mobile-first
+   Midnight Neon palette · Plus Jakarta Sans · mobile-first
    ========================================================================= */
 
 :root {
-  /* Parchment surfaces */
-  --parchment-50:  #FBF7EE;
-  --parchment-100: #F6F1E4;
-  --parchment-200: #EFE7D3;
-  --parchment-300: #E4D7BB;
-  --parchment-400: #C9B68F;
+  /* Midnight surfaces */
+  --parchment-50:  #0E1116;
+  --parchment-100: #151922;
+  --parchment-200: #0A0D12;
+  --parchment-300: #262D3A;
+  --parchment-400: #333B4C;
 
-  /* Ink — warm neutrals */
-  --ink-50:  #F8F4EC;
-  --ink-100: #E9E1D0;
-  --ink-200: #C7BCA4;
-  --ink-300: #9C8F76;
-  --ink-400: #6F6453;
-  --ink-500: #4A4234;
-  --ink-600: #2F2A20;
-  --ink-700: #1F1B14;
-  --ink-800: #14110B;
-  --ink-900: #0A0907;
+  /* Ink — cool neutrals (50-600 = light text family, 700-900 = deep hero surfaces) */
+  --ink-50:  #1E2430;
+  --ink-100: #262E3D;
+  --ink-200: #333D52;
+  --ink-300: #5B6478;
+  --ink-400: #8891A6;
+  --ink-500: #C4CBDD;
+  --ink-600: #929BB2;
+  --ink-700: #F1F3F8;
+  --ink-800: #0A0C11;
+  --ink-900: #05060A;
 
-  /* Terracotta — primary brand */
-  --clay-50:  #FBEEE6;
-  --clay-100: #F6D9C8;
-  --clay-200: #EDB497;
-  --clay-300: #E08D67;
-  --clay-400: #D86F42;
-  --clay-500: #C9582A;
-  --clay-600: #A8421C;
-  --clay-700: #802E12;
-  --clay-800: #59200C;
+  /* Cyan — primary brand */
+  --clay-50:  #ECFEFF;
+  --clay-100: #CFFAFE;
+  --clay-200: #A5F3FC;
+  --clay-300: #67E8F9;
+  --clay-400: #22D3EE;
+  --clay-500: #0891B2;
+  --clay-600: #0E7490;
+  --clay-700: #155E75;
+  --clay-800: #164E63;
 
-  /* Olive — secondary accent */
-  --olive-50:  #F2F1E5;
-  --olive-100: #E1E0C6;
-  --olive-200: #C2C194;
-  --olive-300: #9DA068;
-  --olive-400: #7A8049;
-  --olive-500: #5E6738;
-  --olive-600: #464D29;
+  /* Violet — secondary accent */
+  --olive-50:  #F5F3FF;
+  --olive-100: #EDE9FE;
+  --olive-200: #DDD6FE;
+  --olive-300: #C4B5FD;
+  --olive-400: #A78BFA;
+  --olive-500: #7C3AED;
+  --olive-600: #6D28D9;
 
-  /* Amber — tertiary accent */
-  --amber-50:  #FBF1DC;
-  --amber-100: #F6DFA8;
-  --amber-200: #EDC571;
-  --amber-300: #DCA63B;
-  --amber-400: #B98A26;
-  --amber-500: #8F6A18;
+  /* Lime — tertiary accent */
+  --amber-50:  #F7FEE7;
+  --amber-100: #ECFCCB;
+  --amber-200: #D9F99D;
+  --amber-300: #A3E635;
+  --amber-400: #84CC16;
+  --amber-500: #3F6212;
 
-  /* Plum — premium / business */
-  --plum-50:  #F2E6E6;
-  --plum-200: #C99494;
-  --plum-400: #8A4848;
-  --plum-600: #5A2828;
+  /* Fuchsia — premium / business */
+  --plum-50:  #FDF4FF;
+  --plum-200: #F0ABFC;
+  --plum-400: #A21CAF;
+  --plum-600: #86198F;
 
   /* Semantic feedback */
-  --success-50:  #E8EFE0;
-  --success-500: #4F7A3A;
-  --success-700: #335A22;
-  --danger-50:   #F8E2DA;
-  --danger-500:  #B14D3A;
-  --danger-700:  #82301F;
-  --warning-50:  #FBEED1;
-  --warning-500: #C99B45;
-  --warning-700: #8F6818;
+  --success-50:  #D1FAE5;
+  --success-500: #10B981;
+  --success-700: #065F46;
+  --danger-50:   #FEE2E2;
+  --danger-500:  #EF4444;
+  --danger-700:  #991B1B;
+  --warning-50:  #FEF3C7;
+  --warning-500: #F59E0B;
+  --warning-700: #92400E;
 
   /* Semantic surface tokens */
   --bg-canvas:   var(--parchment-50);
   --bg-default:  var(--parchment-100);
-  --bg-raised:   #FFFFFF;
+  --bg-raised:   #1B202B;
   --bg-sunken:   var(--parchment-200);
-  --bg-overlay:  rgba(20, 17, 11, 0.55);
+  --bg-overlay:  rgba(4, 6, 10, 0.72);
   --bg-inverse:  var(--ink-800);
 
   /* Foreground */
@@ -86,7 +86,7 @@
   --fg-3:        var(--ink-400);
   --fg-4:        var(--ink-300);
   --fg-on-clay:  #FFFFFF;
-  --fg-link:     var(--clay-600);
+  --fg-link:     var(--clay-400);
 
   /* Borders */
   --border-subtle:   var(--parchment-300);
@@ -158,14 +158,15 @@
   --r-3xl:  32px;
   --r-pill: 9999px;
 
-  /* Shadows — warm-cast only */
-  --shadow-xs:    0 1px 2px rgba(31, 27, 20, 0.05);
-  --shadow-sm:    0 2px 6px -2px rgba(31, 27, 20, 0.08), 0 1px 3px rgba(31, 27, 20, 0.04);
-  --shadow-md:    0 8px 20px -8px rgba(31, 27, 20, 0.12), 0 2px 6px -2px rgba(31, 27, 20, 0.06);
-  --shadow-lg:    0 18px 40px -16px rgba(31, 27, 20, 0.18), 0 6px 12px -4px rgba(31, 27, 20, 0.06);
-  --shadow-xl:    0 32px 64px -24px rgba(31, 27, 20, 0.24);
-  --shadow-clay:  0 12px 32px -8px rgba(201, 88, 42, 0.35);
-  --shadow-inset: inset 0 1px 2px rgba(31, 27, 20, 0.08);
+  /* Shadows — cool near-black cast, deeper than the light-theme originals so
+     elevation still reads against a dark canvas */
+  --shadow-xs:    0 1px 2px rgba(0, 0, 0, 0.28);
+  --shadow-sm:    0 2px 6px -2px rgba(0, 0, 0, 0.36), 0 1px 3px rgba(0, 0, 0, 0.22);
+  --shadow-md:    0 8px 20px -8px rgba(0, 0, 0, 0.48), 0 2px 6px -2px rgba(0, 0, 0, 0.28);
+  --shadow-lg:    0 18px 40px -16px rgba(0, 0, 0, 0.58), 0 6px 12px -4px rgba(0, 0, 0, 0.28);
+  --shadow-xl:    0 32px 64px -24px rgba(0, 0, 0, 0.68);
+  --shadow-clay:  0 12px 32px -8px rgba(34, 211, 238, 0.35);
+  --shadow-inset: inset 0 1px 3px rgba(0, 0, 0, 0.5);
 
   /* Motion */
   --ease-out:  cubic-bezier(0.22, 0.61, 0.36, 1);
@@ -194,8 +195,8 @@
     line-height: 1.45;
     color: var(--fg-1);
     background:
-      radial-gradient(1200px 600px at 100% -10%, rgba(201, 88, 42, 0.07), transparent 60%),
-      radial-gradient(900px 600px at -10% 100%, rgba(94, 103, 56, 0.05), transparent 60%),
+      radial-gradient(1200px 600px at 100% -10%, rgba(34, 211, 238, 0.10), transparent 60%),
+      radial-gradient(900px 600px at -10% 100%, rgba(139, 92, 246, 0.08), transparent 60%),
       var(--bg-canvas);
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
@@ -291,7 +292,7 @@
 
   /* Glass surface */
   .glass {
-    background: rgba(251, 247, 238, 0.78);
+    background: rgba(14, 17, 22, 0.78);
     backdrop-filter: blur(20px) saturate(140%);
     -webkit-backdrop-filter: blur(20px) saturate(140%);
   }
@@ -317,7 +318,7 @@
 }
 
 /* =========================================================================
-   SCROLLBAR — warm, slim
+   SCROLLBAR — slim, light-on-dark
    ========================================================================= */
 ::-webkit-scrollbar {
   width: 6px;
@@ -327,11 +328,11 @@
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(31, 27, 20, 0.15);
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(31, 27, 20, 0.28);
+  background: rgba(255, 255, 255, 0.24);
 }
 
 /* Material Symbols default rendering */

@@ -85,7 +85,7 @@ export default function TransaccionDetalle({ txId, onBack, onEdit }) {
       <div style={{ position: 'relative', background: 'var(--ink-800)', color: '#fff', padding: '16px 20px 70px' }}>
         <div style={{
           position: 'absolute', top: -60, right: -60, width: 240, height: 240, borderRadius: '50%',
-          background: 'radial-gradient(circle, rgba(216,111,66,0.34) 0%, rgba(216,111,66,0) 65%)', pointerEvents: 'none',
+          background: 'radial-gradient(circle, rgba(34,211,238,0.34) 0%, rgba(34,211,238,0) 65%)', pointerEvents: 'none',
         }} />
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'relative', zIndex: 1 }}>
           <button

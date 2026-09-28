@@ -71,7 +71,7 @@ export default function CategoriaDetalle({ categoryName, onBack }) {
       <div style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '14px 16px 10px', position: 'sticky', top: 0, zIndex: 10,
-        background: 'rgba(251,247,238,0.9)', backdropFilter: 'blur(16px)',
+        background: 'rgba(14,17,22,0.9)', backdropFilter: 'blur(16px)',
       }}>
         <IconBtn icon="arrow_back" tone="sunken" onClick={onBack} title="Volver" />
         <div style={{ minWidth: 0 }}>
@@ -134,7 +134,7 @@ export default function CategoriaDetalle({ categoryName, onBack }) {
                     aspectRatio: '1 / 1', borderRadius: 8, position: 'relative', boxSizing: 'border-box',
                     background: empty ? 'var(--parchment-100)'
                       : `color-mix(in oklab, var(--clay-500) ${Math.max(15, intensity * 100)}%, var(--parchment-100))`,
-                    border: isToday ? '2px solid var(--ink-800)' : 'none',
+                    border: isToday ? '2px solid var(--clay-400)' : 'none',
                   }}>
                     <div style={{
                       position: 'absolute', top: 4, left: 5, fontSize: 10, fontWeight: 700,

@@ -5,10 +5,10 @@ import {
 import { formatCurrency, formatCompactNumber } from '../../../shared/utils/format';
 
 const CURRENCY_COLORS = {
-  COP: '#C9582A',
-  USD: '#5E6738',
-  EUR: '#DCA63B',
-  DEFAULT: '#8A4848',
+  COP: 'var(--clay-500)',
+  USD: 'var(--olive-500)',
+  EUR: 'var(--amber-500)',
+  DEFAULT: 'var(--plum-400)',
 };
 
 export default function BalanceChart({ dataPoints, currencies, selectedCurrency, onCurrencyChange }) {

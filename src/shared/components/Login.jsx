@@ -33,11 +33,11 @@ export default function Login() {
       display: 'flex', justifyContent: 'center',
       position: 'relative', overflow: 'hidden',
     }}>
-      {/* Warm clay wash, top-right */}
+      {/* Cyan wash, top-right */}
       <div style={{
         position: 'absolute', top: -120, right: -100, width: 420, height: 420,
         borderRadius: '50%', pointerEvents: 'none',
-        background: 'radial-gradient(circle, rgba(216,111,66,0.40) 0%, rgba(216,111,66,0) 65%)',
+        background: 'radial-gradient(circle, rgba(34,211,238,0.40) 0%, rgba(34,211,238,0) 65%)',
       }} />
 
       {/* Phone-width content column */}
@@ -46,7 +46,7 @@ export default function Login() {
         padding: '32px 24px calc(28px + env(safe-area-inset-bottom))',
         display: 'flex', flexDirection: 'column',
         position: 'relative', zIndex: 1,
-        color: 'var(--parchment-50)',
+        color: '#fff',
         animation: 'fadeUp var(--dur-slow) var(--ease-out)',
       }}>
         {/* Brand */}
@@ -114,7 +114,9 @@ export default function Login() {
           {/* Category */}
           <div style={{
             position: 'absolute', top: 132, left: 52, right: 0,
-            background: 'rgba(255,255,255,0.94)', color: 'var(--fg-1)',
+            background: 'rgba(27,32,43,0.92)', color: 'var(--fg-1)',
+            backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
+            border: '1px solid rgba(255,255,255,0.08)',
             borderRadius: 18, padding: '12px 14px',
             boxShadow: '0 20px 40px rgba(0,0,0,0.34)',
           }}>
@@ -136,7 +138,7 @@ export default function Login() {
             position: 'absolute', top: 252, left: 20, right: 64,
             background: 'var(--clay-500)', color: '#fff',
             borderRadius: 18, padding: '12px 14px',
-            boxShadow: '0 20px 40px rgba(201,88,42,0.42)',
+            boxShadow: '0 20px 40px rgba(8,145,178,0.42)',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <Icon name="local_fire_department" size={22} fill />
@@ -155,8 +157,8 @@ export default function Login() {
 
         {error && (
           <div style={{
-            background: 'rgba(177,77,58,0.18)', border: '1px solid rgba(177,77,58,0.32)',
-            color: '#F2C4B8', padding: '10px 14px', borderRadius: 12, marginBottom: 12,
+            background: 'rgba(239,68,68,0.18)', border: '1px solid rgba(239,68,68,0.32)',
+            color: '#FCA5A5', padding: '10px 14px', borderRadius: 12, marginBottom: 12,
             fontSize: 13, fontWeight: 600,
           }}>
             {error}

@@ -340,7 +340,7 @@ export default function MetaModal({ isOpen, onClose, currentContext, editingMeta
                             background: 'var(--plum-400)', color: '#fff',
                             fontFamily: 'var(--font-sans)', fontWeight: 800, fontSize: 15,
                             cursor: 'pointer', marginTop: 4,
-                            boxShadow: '0 4px 16px -4px rgba(155, 92, 246, 0.45)',
+                            boxShadow: '0 4px 16px -4px rgba(162, 28, 175, 0.45)',
                             transition: 'opacity var(--dur-fast) var(--ease-out)',
                         }}
                     >
