@@ -22,6 +22,7 @@ import Insights from './domains/finance/components/Insights';
 
 const Transactions       = lazy(() => import('./domains/finance/components/Transactions'));
 const Presupuestos       = lazy(() => import('./domains/finance/components/Presupuestos'));
+const Cuentas            = lazy(() => import('./domains/finance/components/Cuentas'));
 const CategoriaDetalle   = lazy(() => import('./domains/finance/components/CategoriaDetalle'));
 const TransaccionDetalle = lazy(() => import('./domains/finance/components/TransaccionDetalle'));
 const TransactionModal   = lazy(() => import('./domains/finance/components/TransactionModal'));
@@ -77,51 +78,50 @@ function DeepLinkResolver({ currentUser, pendingEditId, setPendingEditId, openEd
   return null;
 }
 
-// Mobile tab bar — 4 destinos + FAB central
+// Mobile tab bar — 5 destinos; el FAB flota encima, a la derecha (con 5
+// destinos no queda un hueco central para él)
 const TabBar = React.memo(function TabBar({ activeView, onNavigate, onFab }) {
   const items = [
-    { id: 'insights',     icon: 'insights',     label: 'Radiografía' },
-    { id: 'transactions', icon: 'receipt_long', label: 'Movimientos' },
-    { id: '__fab__',      icon: 'add',          label: null },
-    { id: 'presupuestos', icon: 'savings',      label: 'Presupuestos' },
-    { id: 'settings',     icon: 'person',       label: 'Yo' },
+    { id: 'insights',     icon: 'insights',               label: 'Radiografía' },
+    { id: 'transactions', icon: 'receipt_long',           label: 'Movimientos' },
+    { id: 'cuentas',      icon: 'account_balance_wallet', label: 'Cuentas' },
+    { id: 'presupuestos', icon: 'savings',                label: 'Presupuestos' },
+    { id: 'settings',     icon: 'person',                 label: 'Yo' },
   ];
 
   return (
+    <>
+    <button
+      type="button"
+      onClick={onFab}
+      aria-label="Agregar transacción"
+      style={{
+        position: 'fixed', right: 20, zIndex: 51,
+        bottom: 'calc(12px + var(--tabbar-h) + 14px + env(safe-area-inset-bottom, 0px))',
+        width: 54, height: 54, borderRadius: '50%', border: 'none',
+        background: 'var(--clay-500)', color: '#fff', cursor: 'pointer',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        boxShadow: 'var(--shadow-clay)',
+        transition: 'transform var(--dur-fast) var(--ease-out)',
+      }}
+      onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.07)'}
+      onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+    >
+      <Icon name="add" size={26} />
+    </button>
     <nav style={{
       position: 'fixed', left: 12, right: 12, bottom: 12,
       height: 'var(--tabbar-h)',
-      background: 'rgba(255, 255, 255, 0.88)',
+      background: 'rgba(20, 24, 32, 0.82)',
       backdropFilter: 'blur(24px) saturate(140%)',
       WebkitBackdropFilter: 'blur(24px) saturate(140%)',
-      border: '1px solid rgba(255, 255, 255, 0.9)',
+      border: '1px solid rgba(255, 255, 255, 0.08)',
       borderRadius: 22,
       display: 'flex', alignItems: 'center', padding: '0 6px',
       boxShadow: 'var(--shadow-lg)',
       zIndex: 50,
     }}>
       {items.map(item => {
-        if (item.id === '__fab__') {
-          return (
-            <div key="fab" style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-              <button
-                type="button"
-                onClick={onFab}
-                style={{
-                  width: 52, height: 52, borderRadius: '50%', border: 'none',
-                  background: 'var(--clay-500)', color: '#fff', cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  marginTop: -22, boxShadow: 'var(--shadow-clay)',
-                  transition: 'transform var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out)',
-                }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.07)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
-              >
-                <Icon name="add" size={24} />
-              </button>
-            </div>
-          );
-        }
         const isActive = activeView === item.id;
         return (
           <button
@@ -129,21 +129,22 @@ const TabBar = React.memo(function TabBar({ activeView, onNavigate, onFab }) {
             type="button"
             onClick={() => onNavigate(item.id)}
             style={{
-              flex: 1, border: 'none', background: 'transparent', cursor: 'pointer',
+              flex: 1, minWidth: 0, border: 'none', background: 'transparent', cursor: 'pointer',
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
               padding: '8px 0',
-              color: isActive ? 'var(--clay-600)' : 'var(--fg-3)',
+              color: isActive ? 'var(--clay-400)' : 'var(--fg-3)',
               transition: 'color var(--dur-fast) var(--ease-out)',
             }}
           >
             <Icon name={item.icon} size={22} fill={isActive} />
-            <span style={{ fontSize: 9, fontWeight: isActive ? 800 : 600, letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: 9, fontWeight: isActive ? 800 : 600, letterSpacing: '0.02em', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {item.label}
             </span>
           </button>
         );
       })}
     </nav>
+    </>
   );
 });
 
@@ -153,8 +154,8 @@ function ViewLoader() {
     <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 80 }}>
       <div style={{
         width: 28, height: 28, borderRadius: '50%',
-        border: '3px solid rgba(201, 88, 42, 0.2)',
-        borderTopColor: '#C9582A',
+        border: '3px solid rgba(34, 211, 238, 0.2)',
+        borderTopColor: '#0891B2',
         animation: 'splash-spin 0.8s linear infinite',
       }} />
     </div>
@@ -165,13 +166,13 @@ function ViewLoader() {
 // monta y Auth resuelve (evita flashear el Login a usuarios ya logueados).
 function AuthSplash() {
   return (
-    <div style={{ position: 'fixed', inset: 0, background: '#FBF7EE' }}>
+    <div style={{ position: 'fixed', inset: 0, background: '#0E1116' }}>
       <div style={{
         position: 'absolute', top: '50%', left: '50%',
         width: 36, height: 36, margin: '-18px 0 0 -18px',
         borderRadius: '50%',
-        border: '3px solid rgba(201, 88, 42, 0.2)',
-        borderTopColor: '#C9582A',
+        border: '3px solid rgba(34, 211, 238, 0.2)',
+        borderTopColor: '#0891B2',
         animation: 'splash-spin 0.8s linear infinite',
       }} />
     </div>
@@ -180,8 +181,16 @@ function AuthSplash() {
 
 function AppContent() {
   const { currentUser, authLoading } = useAuth();
-  const [currentView, setCurrentView] = useState('insights');
-  const [viewParams, setViewParams] = useState(null);
+  // Deep-link: ?view=cuentas&tab=gmf (alerta del 4x1000)
+  const [currentView, setCurrentView] = useState(() => {
+    if (typeof window === 'undefined') return 'insights';
+    return new URLSearchParams(window.location.search).get('view') === 'cuentas' ? 'cuentas' : 'insights';
+  });
+  const [viewParams, setViewParams] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    return tab ? { tab } : null;
+  });
   const [backView, setBackView] = useState('insights');
   const [isFABModalOpen, setIsFABModalOpen] = useState(false);
   const [fabModalMode, setFabModalMode] = useState('transaction');
@@ -192,6 +201,14 @@ function AppContent() {
     if (typeof window === 'undefined') return null;
     return new URLSearchParams(window.location.search).get('editTx');
   });
+
+  useEffect(() => {
+    const u = new URL(window.location.href);
+    if (!u.searchParams.has('view') && !u.searchParams.has('tab')) return;
+    u.searchParams.delete('view');
+    u.searchParams.delete('tab');
+    window.history.replaceState({}, '', u.pathname + u.search + u.hash);
+  }, []);
 
   // In-app foreground notice stack
   const [foregroundNotices, setForegroundNotices] = useState([]);
@@ -216,7 +233,7 @@ function AppContent() {
     const d = payload?.data || {};
     setForegroundNotices((prev) => {
       const filtered = d.txId ? prev.filter((n) => n.txId !== d.txId) : prev;
-      const next = [...filtered, { id: ++noticeIdRef.current, txId: d.txId, title: d.title, body: d.body }];
+      const next = [...filtered, { id: ++noticeIdRef.current, txId: d.txId, kind: d.kind, title: d.title, body: d.body }];
       return next.slice(-4);
     });
   }, []));
@@ -226,8 +243,13 @@ function AppContent() {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
     const handler = (e) => {
       if (e.data?.type === 'OPEN_EDIT_TX' && e.data.url) {
-        const id = new URL(e.data.url, window.location.origin).searchParams.get('editTx');
+        const params = new URL(e.data.url, window.location.origin).searchParams;
+        const id = params.get('editTx');
         if (id) setPendingEditId(id);
+        if (params.get('view') === 'cuentas') {
+          setCurrentView('cuentas');
+          setViewParams({ tab: params.get('tab') || 'gmf' });
+        }
       }
     };
     navigator.serviceWorker.addEventListener('message', handler);
@@ -282,9 +304,10 @@ function AppContent() {
             {currentView === 'insights'      && <Insights onNavigate={navigate} onAddTransaction={openAddTransaction} onEditTransaction={openEditTransaction} />}
             {currentView === 'transactions'  && <Transactions onNavigate={navigate} onEditTransaction={openEditTransaction} />}
             {currentView === 'presupuestos'  && <Presupuestos onNavigate={navigate} />}
+            {currentView === 'cuentas'       && <Cuentas initialTab={viewParams?.tab} onNavigate={navigate} />}
             {currentView === 'categoria'     && <CategoriaDetalle categoryName={viewParams?.category} onBack={goBack} onNavigate={navigate} />}
             {currentView === 'transaccion'   && <TransaccionDetalle txId={viewParams?.txId} onBack={goBack} onEdit={openEditTransaction} />}
-            {isSettingsView && <Settings onNavigate={navigate} push={push} />}
+            {isSettingsView && <Settings key={viewParams?.tab || 'default'} onNavigate={navigate} push={push} initialTab={viewParams?.tab} />}
             </Suspense>
           </main>
         </div>
@@ -301,8 +324,8 @@ function AppContent() {
               style={{
                 height: 44, padding: '0 16px 0 12px', gap: 7, borderRadius: 9999,
                 border: 'none', cursor: 'pointer',
-                background: 'var(--ink-700)', color: '#fff',
-                boxShadow: '0 8px 24px -6px rgba(31,27,20,0.30)',
+                background: 'var(--ink-800)', color: '#fff',
+                boxShadow: '0 8px 24px -6px rgba(0,0,0,0.40)',
                 display: 'inline-flex', alignItems: 'center',
                 fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: 12,
                 transition: 'transform var(--dur-fast) var(--ease-out)',
@@ -363,7 +386,7 @@ function AppContent() {
                   background: 'var(--clay-500)', color: '#fff',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  <Icon name="rate_review" size={20} />
+                  <Icon name={notice.kind === 'gmf' ? 'receipt_long' : 'rate_review'} size={20} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--fg-1)' }}>
@@ -377,6 +400,7 @@ function AppContent() {
                   type="button"
                   onClick={() => {
                     if (notice.txId) setPendingEditId(notice.txId);
+                    if (notice.kind === 'gmf') navigate('cuentas', { tab: 'gmf' });
                     dismissNotice(notice.id);
                   }}
                   style={{

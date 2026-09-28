@@ -19,8 +19,9 @@ from firebase_admin import firestore, messaging
 from utils import conectar_db
 from tx_enrich import (
     build_merchant_memory, memory_for_prompt, apply_merchant_memory,
-    validate_classification, looks_like_statement,
+    validate_classification, looks_like_statement, resolve_product,
 )
+import gmf
 
 # --- CONFIGURACIÓN ---
 # Zona horaria de Colombia (UTC-5 fijo; el país no usa horario de verano).
@@ -163,12 +164,13 @@ def _prefetch_context(db):
     transacciones registradas (para inferir contexto y normalizar subcategoría).
     """
     doc = db.collection('finance_settings').document('default').get()
-    categorias_raw, cuentas, monedas = [], [], []
+    categorias_raw, cuentas, monedas, productos = [], [], [], []
     if doc.exists:
         data = doc.to_dict()
         categorias_raw = data.get('categories', [])
         cuentas = data.get('accounts', [])
         monedas = data.get('currencies', [])
+        productos = gmf.get_products(data)
 
     # Normalizar categorías a {name, subcategories}
     cat_tree = []
@@ -203,7 +205,27 @@ def _prefetch_context(db):
 
     memoria = build_merchant_memory(historial)
     recientes = historial[:20]
-    return cat_tree, cuentas, monedas, recientes, memoria
+    return cat_tree, cuentas, monedas, recientes, memoria, productos
+
+
+_TIPO_PRODUCTO = {
+    'savings': 'cuenta de ahorros',
+    'checking': 'cuenta corriente',
+    'credit': 'tarjeta de crédito',
+    'cash': 'efectivo',
+}
+
+
+def _productos_para_prompt(productos):
+    return [
+        {k: v for k, v in {
+            'nombre': p['name'],
+            'tipo': _TIPO_PRODUCTO.get(p['type'], p['type']),
+            'banco': p['bank'],
+            'ultimos4': p['last4'],
+        }.items() if v}
+        for p in productos
+    ]
 
 
 def procesar_texto_con_ia(texto, db, client):
@@ -214,7 +236,7 @@ def procesar_texto_con_ia(texto, db, client):
     historial reciente. Devuelve (datos, cat_tree).
     """
     print("🧠 Obteniendo contexto desde Firestore...")
-    cat_tree, cuentas, monedas, recientes, memoria = _prefetch_context(db)
+    cat_tree, cuentas, monedas, recientes, memoria, productos = _prefetch_context(db)
     nombres_categorias = [c['name'] for c in cat_tree]
     memoria_prompt = memory_for_prompt(memoria)
 
@@ -231,8 +253,18 @@ Si el correo es una notificación de un pago que TÚ hiciste, type = 'debit'.
 Categorías disponibles (cada una con sus subcategorías válidas):
 {json.dumps(cat_tree, ensure_ascii=False, indent=2)}
 
-Cuentas/tarjetas disponibles: {cuentas}
+Productos financieros del usuario (cuentas/tarjetas), con tipo, banco y últimos 4 dígitos cuando se conocen:
+{json.dumps(_productos_para_prompt(productos), ensure_ascii=False, indent=2)}
 Monedas disponibles: {monedas}
+
+Cómo identificar el producto y el sentido del dinero:
+- Identifica el producto por el banco que envía el correo y por los últimos 4 dígitos que aparezcan
+  ("terminada en 1234", "*1234", "****1234"). Si no hay dígitos, elige el producto más probable de ese banco.
+- Cuenta de ahorros / corriente / efectivo: dinero que ENTRA (nómina, transferencia recibida, abono) = 'credit';
+  dinero que SALE (compra con débito, retiro, pago PSE, transferencia a un tercero) = 'debit'.
+- Tarjeta de crédito: SOLO registra salidas. Una compra o avance = 'debit' con card = la tarjeta.
+  NUNCA uses 'credit' con una tarjeta de crédito: si el correo dice que la tarjeta RECIBIÓ un pago/abono,
+  es 'transfer' con destinationCard = la tarjeta y card = la cuenta desde la que se pagó.
 
 Memoria de comercios (clasificación HABITUAL por comercio — úsala como prior fuerte para
 categoría, subcategoría y contexto, y para imitar cómo se suele titular cada comercio):
@@ -291,6 +323,11 @@ Si la transacción no fue exitosa o no es una transacción individual, devuelve 
         datos_extraidos, info = apply_merchant_memory(datos_extraidos, memoria)
         if info:
             print(f"🧩 Memoria de comercios ajustó {list(info['changed'])} para '{info['merchant']}' (visto {info['count']}×).")
+
+        # Producto por últimos 4 dígitos y regla "la tarjeta de crédito solo tiene salidas".
+        datos_extraidos, cambios = resolve_product(datos_extraidos, texto, productos)
+        for campo, antes, despues in cambios:
+            print(f"🏦 Producto: {campo} '{antes}' → '{despues}'.")
 
         # Validación contra catálogos (categoría válida, cuenta válida).
         datos_extraidos = validate_classification(datos_extraidos, nombres_categorias, cuentas)
@@ -392,44 +429,24 @@ def registrar_transaccion(datos_ia, tx_dt, db, cat_tree, dry_run=False):
         return False
 
 
-def enviar_push_pending(db, tx_id, tx):
-    """Notifica por push (Web Push/FCM) que entró un movimiento pendiente.
+def enviar_push(db, data):
+    """Envía un Web Push (FCM) data-only a todos los dispositivos registrados.
 
-    Lee todos los tokens registrados por la app web en la colección
-    `fcm_tokens` (doc id == token) y envía un mensaje data-only para que el
-    service worker controle la presentación y el deep link `?editTx=<id>`.
-    Limpia los tokens que FCM reporta como inválidos.
+    Lee los tokens de `fcm_tokens` (doc id == token); el service worker arma
+    la notificación y resuelve el deep link desde data['url']. Limpia los
+    tokens que FCM reporta como inválidos.
     """
     tokens = [d.id for d in db.collection('fcm_tokens').stream()]
     if not tokens:
         print("ℹ️ No hay dispositivos suscritos a notificaciones. Se omite push.")
         return
 
-    tipo = tx.get('type')
-    signo = '-' if tipo == 'debit' else ('⇄ ' if tipo == 'transfer' else '+')
-    try:
-        monto = f"{signo}{float(tx.get('amount', 0)):,.0f} {tx.get('currency', 'COP')}"
-    except (TypeError, ValueError):
-        monto = tx.get('currency', 'COP')
-    titulo = tx.get('title', 'Movimiento')
-    categoria = tx.get('category', '')
-    body = f"{monto} · {titulo}" + (f" · {categoria}" if categoria else "")
-    url = f"/?editTx={tx_id}"
-
     message = messaging.MulticastMessage(
         tokens=tokens,
-        # Data-only: el SW arma la notificación (evita duplicados en Chrome).
-        data={
-            'txId': str(tx_id),
-            'url': url,
-            'title': '🧾 Pendiente de revisión',
-            'body': body,
-        },
+        data={k: str(v) for k, v in data.items()},
         # Sin fcm_options.link: FCM exige URL absoluta HTTPS ahí, pero el deep
         # link lo resuelve nuestro service worker desde data.url (relativo OK).
-        webpush=messaging.WebpushConfig(
-            headers={'Urgency': 'high'},
-        ),
+        webpush=messaging.WebpushConfig(headers={'Urgency': 'high'}),
     )
 
     response = messaging.send_each_for_multicast(message)
@@ -442,6 +459,38 @@ def enviar_push_pending(db, tx_id, tx):
         if isinstance(exc, messaging.UnregisteredError) or 'not-registered' in str(getattr(exc, 'code', '')).lower():
             db.collection('fcm_tokens').document(token).delete()
             print(f"🧹 Token inválido eliminado: {token[:12]}…")
+
+
+def enviar_push_pending(db, tx_id, tx):
+    """Notifica por push que entró un movimiento pendiente de revisión, con
+    deep link `?editTx=<id>`."""
+    tipo = tx.get('type')
+    signo = '-' if tipo == 'debit' else ('⇄ ' if tipo == 'transfer' else '+')
+    try:
+        monto = f"{signo}{float(tx.get('amount', 0)):,.0f} {tx.get('currency', 'COP')}"
+    except (TypeError, ValueError):
+        monto = tx.get('currency', 'COP')
+    titulo = tx.get('title', 'Movimiento')
+    categoria = tx.get('category', '')
+    body = f"{monto} · {titulo}" + (f" · {categoria}" if categoria else "")
+    enviar_push(db, {
+        'txId': tx_id,
+        'url': f"/?editTx={tx_id}",
+        'title': '🧾 Pendiente de revisión',
+        'body': body,
+    })
+
+
+def revisar_alertas_gmf(db, dry_run=False):
+    """Alertas del 4x1000: best-effort, nunca rompe el sync."""
+    try:
+        gmf.check_gmf_alerts(
+            db, datetime.datetime.now(BOGOTA),
+            send_push=lambda data: enviar_push(db, data),
+            dry_run=dry_run,
+        )
+    except Exception as e:
+        print(f"⚠️ No se pudieron revisar las alertas del 4x1000 (no crítico): {e}")
 
 
 def mark_as_processed(service, msg_id, label_id_to_remove):
@@ -552,7 +601,15 @@ def main():
         reprocess_last_emails(db, service, client, args.reprocess_last, args.dry_run)
         return
 
-    label_name = args.label or get_configured_label(db)
+    procesar_correos(db, service, client, args.label)
+
+    # Cada corrida (haya o no correos nuevos) revisa el tope del 4x1000: así
+    # también cubre los movimientos registrados a mano en la app.
+    revisar_alertas_gmf(db)
+
+
+def procesar_correos(db, service, client, label_arg=None):
+    label_name = label_arg or get_configured_label(db)
     print(f"🔍 Buscando el ID interno para la etiqueta '{label_name}'...")
     label_id = get_label_id(service, label_name)
     if not label_id:

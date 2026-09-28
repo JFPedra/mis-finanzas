@@ -23,6 +23,20 @@ Firestore  →  Dashboard React (web / PWA en el celular)
 Push notification: "nuevo movimiento por revisar"
 ```
 
+### Funcionalidades
+
+- **Registro automático**: los correos del banco se convierten en movimientos (pendientes de revisión) con categoría, subcategoría, producto y contexto. Una memoria de comercios corrige la clasificación con tu historial.
+- **Registro manual**: gastos, ingresos y transferencias entre tus productos desde el botón +.
+- **Radiografía**: pulso de los últimos 30 días, racha de registro, comparativos con el mes anterior, gasto por categoría (con mapa de calor diario) y avisos inteligentes.
+- **Movimientos**: lista con filtros (fechas, categoría, cuenta, monto, tipo, pendientes), evolución de saldo por moneda y análisis por categoría/cuenta.
+- **Productos financieros** (Yo → Finanzas → Productos): cuentas de ahorros, corrientes, tarjetas de crédito y efectivo, con banco y últimos 4 dígitos. Gemini usa esos datos para asignar cada correo al producto correcto; en una tarjeta de crédito solo se registran salidas (un pago recibido por la tarjeta se guarda como transferencia desde tu cuenta).
+- **Cuentas → Total**: historial de ingresos y egresos mensual (por defecto), trimestral, semestral o anual, sin discriminar producto.
+- **Cuentas → Por producto**: el mismo historial para cada cuenta o tarjeta (incluye las transferencias entre tus productos).
+- **Cuentas → 4x1000**: tope exento del mes por cuenta marcada como exenta, cuánto has movido, cuánto te queda, proyección a fin de mes y 4x1000 estimado de las cuentas sin exención.
+- **Alertas del 4x1000**: push configurable por producto (por defecto al 80% y 95%, y siempre al superar el 100%), además del aviso en Radiografía.
+- **Presupuestos y metas**: límites por categoría con ritmo del mes, metas de ahorro vinculadas a una cuenta y flujo por periodo libre.
+- **Notificaciones push** de movimientos pendientes (deep link a la edición).
+
 | Capa | Tecnología |
 |------|-----------|
 | Frontend | React 19, Vite, Tailwind CSS |
@@ -165,6 +179,15 @@ Cambiar a `true` restaura el módulo completo. Ojo: con `business: false`, una t
 
 ---
 
+## 4x1000 (GMF)
+
+- **Tope**: 350 UVT al mes (art. 879 num. 1 del E.T.). La UVT oficial por año está en `UVT_BY_YEAR` de `accountHelpers.js` y `gmf.py` (2026: $52.374, Resolución DIAN 000238 de 2025 → tope $18.330.900). No hay una API oficial de la DIAN para consultarla; cuando salga la UVT de un año nuevo, se fija en Yo → Finanzas → 4x1000 · UVT (y conviene actualizar las dos tablas). Cada cuenta también admite un tope manual.
+- **Qué suma**: compras, retiros y transferencias que salen de la cuenta en el mes calendario, en COP. Es una estimación: el banco puede excluir algunos movimientos.
+- **Alertas**: el cron del sync (cada ~10 min) revisa las cuentas exentas con avisos activos y envía una push por cada umbral nuevo cruzado en el mes. Lo ya notificado queda en `gmf_alerts/{producto}_{YYYY-MM}`, así que no se repite.
+- **Datos**: los productos viven en `finance_settings/default.products` (tipo, banco, últimos 4, config GMF); `accounts` se mantiene como la lista de nombres que usa el resto del código. Renombrar un producto re-apunta sus movimientos y metas al nombre nuevo.
+
+---
+
 ## Modelo de seguridad
 
 - **Whitelist server-side** (`firestore.rules`): solo los emails en `finance_settings/users` leen/escriben datos. El doc de whitelist solo lo leen sus miembros (los demás reciben `permission-denied`) y solo el email del dueño puede recrearlo si no existe.
@@ -194,7 +217,9 @@ gh run view <id> --log-failed             # depurar una corrida fallida
 │   ├── config/features.js    # Feature flags de visibilidad
 │   ├── context/AuthContext   # Login Google + whitelist
 │   └── firebase.js           # Config de Firebase (pública)
-├── gmail_finanzas_sync.py    # Pipeline: Gmail → Gemini → Firestore
+├── gmail_finanzas_sync.py    # Pipeline: Gmail → Gemini → Firestore (+ alertas 4x1000)
+├── tx_enrich.py              # Correcciones deterministas (memoria de comercios, producto por últimos 4)
+├── gmf.py                    # Productos y alertas del 4x1000
 ├── bootstrap_token.py        # Una vez: sembrar/renovar el token de Gmail
 ├── send_test_push.py         # Prueba end-to-end de notificaciones
 ├── firestore.rules           # Reglas de seguridad (whitelist)

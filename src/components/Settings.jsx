@@ -6,6 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { Icon, Card, Eyebrow, Segmented } from '../shared/ds/Primitives';
 import ConfirmModal from '../shared/components/ConfirmModal';
 import { FEATURES } from '../config/features';
+import { ProductsSection, GmfConfigSection } from './ProductsSection';
 
 const INPUT_STYLE = {
     flex: 1, padding: '9px 12px',
@@ -911,13 +912,12 @@ const WhitelistSection = () => {
     );
 };
 
-export default function Settings({ push }) {
+export default function Settings({ push, initialTab }) {
     const { appConfig, updateAppConfig } = useFinance();
     const { currentUser, logout } = useAuth();
     const [saving, setSaving] = useState(false);
     const [newCurrency, setNewCurrency] = useState('');
-    const [newAccount, setNewAccount] = useState('');
-    const [activeTab, setActiveTab] = useState('account');
+    const [activeTab, setActiveTab] = useState(initialTab || 'account');
 
     const displayName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Usuario';
     const email = currentUser?.email || '';
@@ -1026,6 +1026,10 @@ export default function Settings({ push }) {
             </>}
             {/* FINANZAS TAB */}
             {activeTab === 'finance' && <>
+            {/* Products */}
+            <Eyebrow style={{ paddingLeft: 4, marginTop: 4 }}>Productos</Eyebrow>
+            <ProductsSection />
+
             {/* Catalogs */}
             <Eyebrow style={{ paddingLeft: 4, marginTop: 4 }}>Catálogos</Eyebrow>
             <div style={{
@@ -1040,15 +1044,6 @@ export default function Settings({ push }) {
                     setInputValue={setNewCurrency}
                     placeholder="Ej. GBP"
                 />
-                <ConfigSection
-                    {...sharedSectionProps}
-                    title="Tarjetas y Cuentas"
-                    icon="credit_card"
-                    listName="accounts"
-                    inputValue={newAccount}
-                    setInputValue={setNewAccount}
-                    placeholder="Ej. Santander Débito"
-                />
                 <CategoryConfigSection
                     appConfig={appConfig}
                     saving={saving}
@@ -1058,7 +1053,12 @@ export default function Settings({ push }) {
 
             {/* Instance config */}
             <Eyebrow style={{ paddingLeft: 4, marginTop: 4 }}>Instancia</Eyebrow>
-            <InstanceConfigSection appConfig={appConfig} updateAppConfig={updateAppConfig} />
+            <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14,
+            }}>
+                <InstanceConfigSection appConfig={appConfig} updateAppConfig={updateAppConfig} />
+                <GmfConfigSection />
+            </div>
 
             </>}
             {/* CUENTA TAB — part 2: whitelist + notifications + logout */}

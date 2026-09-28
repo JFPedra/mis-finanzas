@@ -23,6 +23,7 @@ vi.mock('firebase/firestore', () => ({
     Timestamp: { now: vi.fn(() => ({ seconds: 1234567890 })) },
     deleteDoc: (...args) => mockDeleteDoc(...args),
     updateDoc: (...args) => mockUpdateDoc(...args),
+    writeBatch: vi.fn(() => ({ update: vi.fn(), commit: vi.fn() })),
 }));
 
 vi.mock('../firebase', () => ({

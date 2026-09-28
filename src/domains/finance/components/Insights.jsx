@@ -7,6 +7,7 @@ import {
 } from '../../../shared/ds/Primitives';
 import ContextSwitcher from './ContextSwitcher';
 import CompactTransactions from './CompactTransactions';
+import { gmfStatus } from '../utils/accountHelpers';
 
 const DEFAULT_EXCHANGE_RATE = 4100;
 const DAY_MS = 86400000;
@@ -17,7 +18,7 @@ const txDate = (t) => (t.date?.toDate ? t.date.toDate() : new Date(t.date));
 const midnight = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
 
 export default function Insights({ onNavigate, onEditTransaction }) {
-  const { transactions, loading, currentContext, appConfig } = useFinance();
+  const { transactions, loading, currentContext, appConfig, products } = useFinance();
 
   // Tasa USD→COP configurable en Settings → Finanzas; fallback al valor histórico.
   const exchangeRate = Number(appConfig?.exchangeRate) > 0
@@ -97,6 +98,26 @@ export default function Insights({ onNavigate, onEditTransaction }) {
   // Smart insights derived from real data
   const insights = useMemo(() => {
     const list = [];
+
+    // 4x1000: cuentas exentas que ya cruzaron el primer umbral de aviso
+    products
+      .filter(p => p.type === 'savings' && p.gmf.exempt && p.gmf.alertsEnabled)
+      .forEach(p => {
+        const s = gmfStatus(p, transactions, today, appConfig?.uvtOverrides);
+        if (s.level === 'ok') return;
+        const over = s.level === 'over';
+        list.push({
+          tone: over ? 'var(--danger-500)' : 'var(--warning-500)',
+          icon: over ? 'error' : 'warning', fill: true,
+          titleColor: 'var(--fg-1)',
+          title: over ? `Superaste el tope del 4x1000 en ${p.name}` : `${p.name} va en el ${s.pct.toFixed(0)}% del tope del 4x1000`,
+          body: over
+            ? `Llevas ${formatCurrency(s.used, 'COP')} de ${formatCurrency(s.limit, 'COP')}. El exceso paga 4x1000 (≈ ${formatCurrency(s.taxOnExcess, 'COP')}).`
+            : `Te quedan ${formatCurrency(s.remaining, 'COP')} exentos y faltan ${s.daysLeft} días para el corte.`,
+          onClick: () => onNavigate && onNavigate('cuentas', { tab: 'gmf' }),
+        });
+      });
+
     const monthTxs = filtered.filter(t => {
       const d = txDate(t);
       return d.getMonth() === month && d.getFullYear() === year && t.type === 'debit' && !isTransferTx(t);
@@ -142,7 +163,7 @@ export default function Insights({ onNavigate, onEditTransaction }) {
       });
     }
     return list;
-  }, [filtered, month, year, monthAgg, today, onNavigate, exchangeRate]);
+  }, [filtered, month, year, monthAgg, today, onNavigate, exchangeRate, products, transactions, appConfig]);
 
   // This-month spending grouped by category — entry point to the category heatmap
   const categoryBreakdown = useMemo(() => {
