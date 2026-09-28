@@ -458,7 +458,7 @@ export default function Presupuestos({ onNavigate }) {
                           {progreso.toFixed(0)}%
                         </span>
                       </div>
-                      <ProgressBar value={Math.max(0, meta.ahorrado)} max={meta.objetivo || 1} color="var(--olive-500)" />
+                      <ProgressBar value={Math.max(0, meta.ahorrado)} max={meta.objetivo || 1} color="var(--olive-400)" />
                       {meta.fechaObjetivo && (() => {
                         const target = new Date(meta.fechaObjetivo + 'T12:00:00');
                         const meses = differenceInCalendarMonths(target, new Date()) + 1; // incluye el mes en curso

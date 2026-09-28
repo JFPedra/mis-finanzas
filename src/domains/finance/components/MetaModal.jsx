@@ -337,7 +337,7 @@ export default function MetaModal({ isOpen, onClose, currentContext, editingMeta
                         style={{
                             width: '100%', padding: '14px 20px',
                             borderRadius: 'var(--r-xl)', border: 'none',
-                            background: 'var(--plum-400)', color: '#fff',
+                            background: 'var(--plum-500)', color: '#fff',
                             fontFamily: 'var(--font-sans)', fontWeight: 800, fontSize: 15,
                             cursor: 'pointer', marginTop: 4,
                             boxShadow: '0 4px 16px -4px rgba(162, 28, 175, 0.45)',

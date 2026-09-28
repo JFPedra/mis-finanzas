@@ -19,58 +19,67 @@
   --ink-50:  #1E2430;
   --ink-100: #262E3D;
   --ink-200: #333D52;
-  --ink-300: #5B6478;
-  --ink-400: #8891A6;
+  --ink-300: #7D879C;
+  --ink-400: #9AA3B8;
   --ink-500: #C4CBDD;
   --ink-600: #929BB2;
   --ink-700: #F1F3F8;
   --ink-800: #0A0C11;
   --ink-900: #05060A;
 
+  /* Roles de cada tono en el tema oscuro (contraste WCAG medido sobre las
+     tarjetas #1B202B / #151922 / #0E1116):
+     - 50:           fondo de chip/ícono — tinte oscuro del color
+     - 500 (clay, olive), plum-500, danger-600: relleno de botón con texto blanco (≥4.5)
+     - 600 / 700, amber-500, plum-600: texto — sirve sobre su chip y sobre la tarjeta (≥8)
+     - 300 / 400:    acentos brillantes (texto destacado, barras, líneas, bordes) */
+
   /* Cyan — primary brand */
-  --clay-50:  #ECFEFF;
+  --clay-50:  #0B2A31;
   --clay-100: #CFFAFE;
   --clay-200: #A5F3FC;
   --clay-300: #67E8F9;
   --clay-400: #22D3EE;
-  --clay-500: #0891B2;
-  --clay-600: #0E7490;
-  --clay-700: #155E75;
+  --clay-500: #0B7F9C;
+  --clay-600: #67E8F9;
+  --clay-700: #A5F3FC;
   --clay-800: #164E63;
 
   /* Violet — secondary accent */
-  --olive-50:  #F5F3FF;
+  --olive-50:  #1E1838;
   --olive-100: #EDE9FE;
   --olive-200: #DDD6FE;
   --olive-300: #C4B5FD;
   --olive-400: #A78BFA;
   --olive-500: #7C3AED;
-  --olive-600: #6D28D9;
+  --olive-600: #C4B5FD;
 
   /* Lime — tertiary accent */
-  --amber-50:  #F7FEE7;
+  --amber-50:  #1C2A0B;
   --amber-100: #ECFCCB;
   --amber-200: #D9F99D;
   --amber-300: #A3E635;
   --amber-400: #84CC16;
-  --amber-500: #3F6212;
+  --amber-500: #BEF264;
 
   /* Fuchsia — premium / business */
-  --plum-50:  #FDF4FF;
+  --plum-50:  #2A1030;
   --plum-200: #F0ABFC;
-  --plum-400: #A21CAF;
-  --plum-600: #86198F;
+  --plum-400: #E879F9;
+  --plum-500: #A21CAF;
+  --plum-600: #F0ABFC;
 
   /* Semantic feedback */
-  --success-50:  #D1FAE5;
+  --success-50:  #0D2E22;
   --success-500: #10B981;
-  --success-700: #065F46;
-  --danger-50:   #FEE2E2;
-  --danger-500:  #EF4444;
-  --danger-700:  #991B1B;
-  --warning-50:  #FEF3C7;
+  --success-700: #6EE7B7;
+  --danger-50:   #3B1418;
+  --danger-500:  #F87171;
+  --danger-600:  #DC2626;
+  --danger-700:  #FCA5A5;
+  --warning-50:  #362409;
   --warning-500: #F59E0B;
-  --warning-700: #92400E;
+  --warning-700: #FCD34D;
 
   /* Semantic surface tokens */
   --bg-canvas:   var(--parchment-50);
@@ -96,7 +105,7 @@
 
   /* Brand */
   --brand-primary:       var(--clay-500);
-  --brand-primary-hover: var(--clay-600);
+  --brand-primary-hover: var(--clay-800);
   --brand-secondary:     var(--olive-500);
   --brand-tertiary:      var(--amber-300);
 

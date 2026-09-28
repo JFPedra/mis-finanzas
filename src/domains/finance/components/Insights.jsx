@@ -217,8 +217,8 @@ export default function Insights({ onNavigate, onEditTransaction }) {
         </Eyebrow>
         <Editorial size={26}>
           {streak > 0
-            ? <>Llevas <span style={{ color: 'var(--clay-500)' }}>{streak} {streak === 1 ? 'día' : 'días'}</span> registrando.</>
-            : <>Tu <span style={{ color: 'var(--clay-500)' }}>radiografía</span> financiera.</>}
+            ? <>Llevas <span style={{ color: 'var(--clay-400)' }}>{streak} {streak === 1 ? 'día' : 'días'}</span> registrando.</>
+            : <>Tu <span style={{ color: 'var(--clay-400)' }}>radiografía</span> financiera.</>}
         </Editorial>
       </div>
 
