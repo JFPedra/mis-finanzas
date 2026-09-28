@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Política de privacidad · Mis Finanzas</title>
+  <meta name="theme-color" content="#0E1116" />
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0; padding: 40px 20px 64px;
+      background: #0E1116; color: #C4CBDD;
+      font: 15px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    main { max-width: 720px; margin: 0 auto; }
+    h1 { color: #F1F3F8; font-size: 28px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.02em; }
+    h2 { color: #F1F3F8; font-size: 18px; margin: 32px 0 8px; }
+    p, li { margin: 0 0 10px; }
+    ul { padding-left: 20px; }
+    strong { color: #F1F3F8; }
+    a { color: #22D3EE; }
+    code { overflow-wrap: anywhere; color: #F1F3F8; }
+    .meta { color: #9AA3B8; font-size: 13px; margin-bottom: 28px; }
+    .box {
+      background: #1B202B; border: 1px solid #262E3D; border-radius: 16px;
+      padding: 16px 18px; margin: 16px 0;
+    }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Política de privacidad</h1>
+  <p class="meta">Mis Finanzas · Última actualización: 28 de septiembre de 2026</p>
+
+  <p>
+    <strong>Mis Finanzas</strong> es una aplicación de finanzas personales de uso privado. La usa únicamente su
+    propietario y las personas autorizadas expresamente. No es un servicio comercial, no tiene publicidad y no
+    vende ni comparte datos con terceros con fines comerciales.
+  </p>
+
+  <h2>Qué datos de Google usa la aplicación</h2>
+  <p>
+    Con tu autorización, la aplicación accede a tu cuenta de Gmail con el permiso
+    <code>https://www.googleapis.com/auth/gmail.modify</code> para:
+  </p>
+  <ul>
+    <li><strong>Buscar y leer</strong> solo los correos de los remitentes bancarios que configuras en la aplicación
+      (y, si la activas, los que tienen la etiqueta de Gmail que indicas).</li>
+    <li><strong>Quitar esa etiqueta</strong> de los correos ya procesados. Por eso se requiere
+      <code>gmail.modify</code> y no un permiso de solo lectura. La aplicación no envía, borra ni reenvía correos.</li>
+  </ul>
+  <p>
+    Para el inicio de sesión con Google, la aplicación usa tu nombre, tu correo y tu foto de perfil para
+    identificarte y verificar que estás en la lista de usuarios autorizados.
+  </p>
+
+  <h2>Para qué se usan</h2>
+  <p>
+    El texto de los correos bancarios se usa exclusivamente para extraer los datos de cada movimiento (monto,
+    comercio, fecha, cuenta o tarjeta, categoría) y registrarlos en tu historial financiero dentro de la aplicación.
+    No se usan para ningún otro propósito.
+  </p>
+
+  <h2>Con quién se comparten</h2>
+  <ul>
+    <li><strong>Google Gemini API</strong>: el asunto, el remitente y el texto de cada correo bancario se envían a la
+      API de Gemini para interpretar el movimiento. Se rige por los
+      <a href="https://ai.google.dev/gemini-api/terms" rel="noopener">términos de la API de Gemini</a>.</li>
+    <li><strong>Firebase / Google Cloud</strong>: los movimientos, la configuración y el token de autorización de
+      Gmail se almacenan en Cloud Firestore, dentro del proyecto de Firebase del propietario.</li>
+  </ul>
+  <p>No se comparten datos con ninguna otra persona o servicio.</p>
+
+  <h2>Almacenamiento y seguridad</h2>
+  <ul>
+    <li>Solo las cuentas de Google que están en la lista de usuarios autorizados pueden ver o modificar los datos
+      financieros; lo garantizan las reglas de seguridad de Firestore.</li>
+    <li>El token de acceso a Gmail se guarda en una colección que la aplicación web no puede leer; solo lo usa el
+      proceso automático del propietario, con credenciales de servidor.</li>
+    <li>Las comunicaciones se hacen siempre por conexiones cifradas (HTTPS).</li>
+  </ul>
+
+  <h2>Conservación y eliminación</h2>
+  <p>
+    Los movimientos se conservan mientras el propietario los mantenga en la aplicación y se pueden eliminar en
+    cualquier momento desde ella. Puedes retirar el acceso a tu Gmail cuando quieras en
+    <a href="https://myaccount.google.com/permissions" rel="noopener">myaccount.google.com/permissions</a>;
+    desde ese momento la aplicación deja de leer tus correos.
+  </p>
+
+  <div class="box">
+    <strong>Uso limitado.</strong> El uso que hace Mis Finanzas de la información recibida de las API de Google, y su
+    transferencia a cualquier otra aplicación, cumple la
+    <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener">Política de datos de
+    usuario de los servicios de API de Google</a>, incluidos los requisitos de uso limitado.
+  </div>
+
+  <h2>Cambios y contacto</h2>
+  <p>
+    Si esta política cambia, se actualizará en esta misma página con una nueva fecha. Para cualquier pregunta,
+    escribe al correo de asistencia que aparece en la pantalla de autorización de Google de esta aplicación.
+  </p>
+</main>
+</body>
+</html>
