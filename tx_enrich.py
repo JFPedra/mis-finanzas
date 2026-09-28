@@ -128,6 +128,62 @@ def apply_merchant_memory(datos, memory,
     return out, {"merchant": m["merchant"], "count": m["count"], "changed": changed}
 
 
+# Últimos 4 dígitos en contexto de tarjeta/cuenta: "*1234", "**1234",
+# "terminada en 1234", "cuenta No. 1234", "x1234".
+_LAST4_RE = re.compile(
+    r"(?:\*{1,}|x{2,}|•{2,}|terminad[ao]\s+en|finalizad[ao]\s+en|final\s+|n[uú]mero\s+|no\.?\s*)\s*(\d{4})\b",
+    re.IGNORECASE,
+)
+
+
+def _mentioned_products(text, products):
+    """Productos cuyo `last4` aparece en el correo en contexto de tarjeta/cuenta."""
+    digits = {m.group(1) for m in _LAST4_RE.finditer(text or "")}
+    return [p for p in products if p.get("last4") and p["last4"] in digits]
+
+
+def resolve_product(datos, text, products):
+    """Post-corrección determinista de la cuenta con el catálogo de productos:
+
+    1. Si el correo menciona los últimos 4 dígitos de exactamente un producto,
+       ese es el producto del movimiento (origen, o destino en un pago de tarjeta).
+    2. Una tarjeta de crédito solo tiene salidas: un 'credit' sobre la tarjeta
+       es un pago/abono recibido → 'transfer' desde la cuenta pagadora por
+       defecto (el primer producto de ahorros/corriente) hacia la tarjeta.
+
+    Devuelve (datos_corregidos, [cambios]). Pura.
+    """
+    if not products or datos.get("type") == "ignore":
+        return datos, []
+    out = dict(datos)
+    changes = []
+    by_name = {p["name"]: p for p in products}
+
+    mentioned = _mentioned_products(text, products)
+    if len(mentioned) == 1:
+        match = mentioned[0]["name"]
+        if out.get("type") == "transfer" and by_name.get(match, {}).get("type") == "credit":
+            if out.get("destinationCard") != match:
+                changes.append(("destinationCard", out.get("destinationCard"), match))
+                out["destinationCard"] = match
+        elif out.get("card") != match:
+            changes.append(("card", out.get("card"), match))
+            out["card"] = match
+
+    card = by_name.get(out.get("card"))
+    if card and card["type"] == "credit" and out.get("type") == "credit":
+        payer = next((p["name"] for p in products if p["type"] in ("savings", "checking")), None)
+        if payer:
+            changes.append(("type", "credit", "transfer"))
+            out["type"] = "transfer"
+            out["destinationCard"] = card["name"]
+            out["card"] = payer
+
+    if out.get("type") != "transfer":
+        out["destinationCard"] = ""
+    return out, changes
+
+
 def validate_classification(datos, category_names, accounts):
     """Asegura que la categoría exista en el catálogo (si no, 'Otros') y que la
     cuenta exista (si no, la acerca por fuzzy a una cuenta válida). Pura."""

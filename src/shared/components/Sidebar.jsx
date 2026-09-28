@@ -69,6 +69,7 @@ export default function Sidebar({ activeView, onNavigate }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: 1, alignItems: 'center', overflowY: 'auto' }}>
         <RailItem icon="insights"     title="Radiografía"  active={activeView === 'insights'}     onClick={() => onNavigate('insights')} />
         <RailItem icon="receipt_long" title="Movimientos"  active={activeView === 'transactions'} onClick={() => onNavigate('transactions')} />
+        <RailItem icon="account_balance_wallet" title="Cuentas" active={activeView === 'cuentas'} onClick={() => onNavigate('cuentas')} />
         <RailItem icon="savings"      title="Presupuestos" active={activeView === 'presupuestos'} onClick={() => onNavigate('presupuestos')} />
 
         <Divider />

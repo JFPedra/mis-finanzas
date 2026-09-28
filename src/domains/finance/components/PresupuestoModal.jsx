@@ -211,7 +211,7 @@ export default function PresupuestoModal({ isOpen, onClose, currentContext, curr
                             onClick={() => setConfirmDelete(true)}
                             style={{
                                 width: '100%', padding: '12px 20px',
-                                borderRadius: 'var(--r-xl)', border: '1px solid var(--danger-200, rgba(177,77,58,0.35))',
+                                borderRadius: 'var(--r-xl)', border: '1px solid var(--danger-200, rgba(239,68,68,0.35))',
                                 background: 'transparent', color: 'var(--danger-700)',
                                 fontFamily: 'var(--font-sans)', fontWeight: 700, fontSize: 14,
                                 cursor: 'pointer',

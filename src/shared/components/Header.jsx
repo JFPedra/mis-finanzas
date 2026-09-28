@@ -4,10 +4,10 @@ export default function Header() {
   return (
     <header style={{
       position: 'sticky', top: 0, zIndex: 40,
-      background: 'rgba(251, 247, 238, 0.82)',
+      background: 'rgba(14, 17, 22, 0.82)',
       backdropFilter: 'blur(20px) saturate(140%)',
       WebkitBackdropFilter: 'blur(20px) saturate(140%)',
-      borderBottom: '1px solid rgba(31, 27, 20, 0.06)',
+      borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
     }}>
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,

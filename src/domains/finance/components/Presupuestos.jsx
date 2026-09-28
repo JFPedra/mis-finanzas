@@ -402,7 +402,7 @@ export default function Presupuestos({ onNavigate }) {
                           title="Ritmo del mes"
                           style={{
                             position: 'absolute', top: -2, left: `${tempo.monthPct * 100}%`,
-                            width: 2, height: 12, background: 'var(--ink-700)', transform: 'translateX(-1px)',
+                            width: 2, height: 12, background: 'var(--ink-800)', transform: 'translateX(-1px)',
                           }}
                         />
                       </div>

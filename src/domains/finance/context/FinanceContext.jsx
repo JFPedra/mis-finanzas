@@ -1,7 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../../../firebase';
-import { collection, onSnapshot, addDoc, doc, setDoc, getDoc, Timestamp, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, onSnapshot, addDoc, doc, setDoc, getDoc, Timestamp, deleteDoc, updateDoc, writeBatch } from 'firebase/firestore';
 import { normalizeCategory, parseTransactionDate, calculateBalances } from '../utils/financeHelpers';
+import { getProducts } from '../utils/accountHelpers';
 import { FEATURES } from '../../../config/features';
 
 const FinanceContext = createContext();
@@ -178,6 +179,38 @@ export const FinanceProvider = ({ children }) => {
             throw error;
         }
     }, []);
+
+    const products = useMemo(() => getProducts(appConfig), [appConfig]);
+
+    // Guarda el catálogo de productos. `accounts` (solo nombres) se reescribe a
+    // la par porque el resto de la app y el sync de Python lo leen. Un rename
+    // re-apunta los movimientos y metas al nombre nuevo para no partir el
+    // historial del producto.
+    const saveProducts = useCallback(async (nextProducts, renames = []) => {
+        const effective = renames.filter(r => r.from && r.to && r.from !== r.to);
+        if (effective.length) {
+            const map = new Map(effective.map(r => [r.from, r.to]));
+            const writes = [];
+            transactions.forEach(t => {
+                const patch = {};
+                if (map.has(t.card)) patch.card = map.get(t.card);
+                if (map.has(t.destinationCard)) patch.destinationCard = map.get(t.destinationCard);
+                if (Object.keys(patch).length) writes.push([doc(db, 'finance_transactions', t.id), patch]);
+            });
+            goals.forEach(g => {
+                if (map.has(g.cuenta)) writes.push([doc(db, 'finance_goals', g.id), { cuenta: map.get(g.cuenta) }]);
+            });
+            for (let i = 0; i < writes.length; i += 450) {
+                const batch = writeBatch(db);
+                writes.slice(i, i + 450).forEach(([ref, patch]) => batch.update(ref, patch));
+                await batch.commit();
+            }
+        }
+        await patchAppConfig({
+            accounts: nextProducts.map(p => p.name),
+            products: nextProducts,
+        });
+    }, [transactions, goals, patchAppConfig]);
 
     const addTransaction = useCallback(async (data) => {
         try {
@@ -371,6 +404,8 @@ export const FinanceProvider = ({ children }) => {
         appConfig,
         updateAppConfig,
         patchAppConfig,
+        products,
+        saveProducts,
         addGoal,
         updateGoal,
         deleteGoal,
@@ -379,7 +414,8 @@ export const FinanceProvider = ({ children }) => {
     }), [
         transactions, budgets, goals, loading, currentContext, getTotals, appConfig,
         addTransaction, addTransfer, deleteTransaction, updateTransaction,
-        updateAppConfig, patchAppConfig, addGoal, updateGoal, deleteGoal, fetchBudgetConfig, saveBudgetConfig,
+        updateAppConfig, patchAppConfig, products, saveProducts,
+        addGoal, updateGoal, deleteGoal, fetchBudgetConfig, saveBudgetConfig,
     ]);
 
     return (
